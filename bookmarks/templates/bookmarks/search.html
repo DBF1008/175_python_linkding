@@ -73,6 +73,54 @@
         </div>
         {% for hidden_field in preferences_form.hidden_fields %}{{ hidden_field }}{% endfor %}
       </form>
+      {% if request.user.is_authenticated %}
+        <div class="divider" role="separator"></div>
+        <form id="save_search"
+              class="saved-search-form"
+              action="{% url 'linkding:saved_searches.action' %}"
+              method="post">
+          {% csrf_token %}
+          <div class="form-group">
+            <label for="id_saved_search_name" class="form-label">Save current search</label>
+            <div class="input-group">
+              <input type="text"
+                     name="name"
+                     id="id_saved_search_name"
+                     class="form-input input-sm"
+                     placeholder="Name"
+                     required>
+              <button type="submit"
+                      name="create"
+                      class="btn btn-sm btn-primary input-group-btn">Save</button>
+            </div>
+          </div>
+          {% for hidden_field in saved_search_form.hidden_fields %}{{ hidden_field }}{% endfor %}
+          <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
+        </form>
+        {% if saved_searches %}
+          <form id="overwrite_search"
+                class="saved-search-form"
+                action="{% url 'linkding:saved_searches.action' %}"
+                method="post">
+            {% csrf_token %}
+            <div class="form-group">
+              <label for="id_overwrite_saved_search" class="form-label">Update existing</label>
+              <div class="input-group">
+                <select name="overwrite"
+                        id="id_overwrite_saved_search"
+                        class="form-select select-sm">
+                  {% for saved_search in saved_searches %}
+                    <option value="{{ saved_search.id }}">{{ saved_search.name }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm input-group-btn">Update</button>
+              </div>
+            </div>
+            {% for hidden_field in saved_search_form.hidden_fields %}{{ hidden_field }}{% endfor %}
+            <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
+          </form>
+        {% endif %}
+      {% endif %}
     </div>
   </ld-dropdown>
 </div>

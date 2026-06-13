@@ -24,5 +24,7 @@ def bookmark_search(context, search: BookmarkSearch, mode: str = ""):
         "search": search,
         "search_form": search_form,
         "preferences_form": preferences_form,
+        "saved_searches": context.get("saved_searches"),
+        "saved_search_form": BookmarkSearchForm(search, editable_fields=[]),
         "mode": mode,
     }

@@ -1,0 +1,67 @@
+{% extends "shared/layout.html" %}
+{% load static %}
+{% block head %}
+  {% with page_title="Saved searches - Linkding" %}{{ block.super }}{% endwith %}
+{% endblock %}
+{% block content %}
+  <main class="saved-searches-page crud-page" aria-labelledby="main-heading">
+    <div class="crud-header">
+      <h1 id="main-heading">Saved searches</h1>
+    </div>
+    {% include 'shared/messages.html' %}
+    {% if saved_searches %}
+      <table class="table crud-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th class="actions">
+              <span class="text-assistive">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for saved_search in saved_searches %}
+            <tr data-saved-search-id="{{ saved_search.id }}">
+              <td>
+                <form action="{% url 'linkding:saved_searches.action' %}"
+                      method="post"
+                      class="d-flex align-center">
+                  {% csrf_token %}
+                  <input type="text"
+                         name="name"
+                         value="{{ saved_search.name }}"
+                         class="form-input input-sm"
+                         aria-label="Saved search name"
+                         required>
+                  <button type="submit"
+                          name="rename"
+                          value="{{ saved_search.id }}"
+                          class="btn btn-link ml-1">Save</button>
+                </form>
+              </td>
+              <td class="actions">
+                <a class="btn btn-link"
+                   href="{% url 'linkding:bookmarks.index' %}?{{ saved_search.query }}">Open</a>
+                <form action="{% url 'linkding:saved_searches.action' %}"
+                      method="post"
+                      class="d-inline">
+                  {% csrf_token %}
+                  <button data-confirm
+                          type="submit"
+                          name="remove"
+                          value="{{ saved_search.id }}"
+                          class="btn btn-link">Remove</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty">
+        <p class="empty-title h5">You have no saved searches yet</p>
+        <p class="empty-subtitle">Run a search, then use "Save current search" from the search options to create one.</p>
+      </div>
+    {% endif %}
+  </main>
+{% endblock %}

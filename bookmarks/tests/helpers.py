@@ -20,6 +20,7 @@ from bookmarks.models import (
     Bookmark,
     BookmarkAsset,
     BookmarkBundle,
+    BookmarkSavedSearch,
     Tag,
     User,
 )
@@ -201,6 +202,24 @@ class BookmarkFactoryMixin:
         )
         bundle.save()
         return bundle
+
+    def setup_saved_search(
+        self,
+        user: User = None,
+        name: str = None,
+        query: str = "",
+    ):
+        if user is None:
+            user = self.get_or_create_test_user()
+        if not name:
+            name = get_random_string(length=32)
+        saved_search = BookmarkSavedSearch(
+            name=name,
+            query=query,
+            owner=user,
+        )
+        saved_search.save()
+        return saved_search
 
     def setup_asset(
         self,

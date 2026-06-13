@@ -1,5 +1,5 @@
 from bookmarks import utils
-from bookmarks.models import Toast
+from bookmarks.models import BookmarkSavedSearch, Toast
 
 
 def toasts(request):
@@ -15,6 +15,16 @@ def toasts(request):
         "has_toasts": has_toasts,
         "toast_messages": toast_messages,
     }
+
+
+def saved_searches(request):
+    user = request.user
+    items = (
+        BookmarkSavedSearch.objects.filter(owner=user).order_by("name")
+        if user.is_authenticated
+        else []
+    )
+    return {"saved_searches": items}
 
 
 def app_version(request):

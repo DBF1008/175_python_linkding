@@ -37,6 +37,9 @@
       {% if bundles %}
         {% include 'bookmarks/bundle_section.html' %}
       {% endif %}
+      {% if saved_searches %}
+        {% include 'bookmarks/saved_search_section.html' %}
+      {% endif %}
       {% if user_list %}
         {% include 'bookmarks/user_section.html' %}
       {% endif %}

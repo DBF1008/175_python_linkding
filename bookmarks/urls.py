@@ -9,6 +9,7 @@ from bookmarks.views import assets as assets_views
 from bookmarks.views import auth as linkding_auth_views
 from bookmarks.views import bookmarks as bookmarks_views
 from bookmarks.views import bundles as bundles_views
+from bookmarks.views import saved_searches as saved_searches_views
 from bookmarks.views import settings as settings_views
 from bookmarks.views import tags as tags_views
 from bookmarks.views import toasts as toasts_views
@@ -60,6 +61,17 @@ urlpatterns = [
     path("bundles/new", bundles_views.new, name="bundles.new"),
     path("bundles/<int:bundle_id>/edit", bundles_views.edit, name="bundles.edit"),
     path("bundles/preview", bundles_views.preview, name="bundles.preview"),
+    # Saved searches
+    path(
+        "saved-searches",
+        saved_searches_views.index,
+        name="saved_searches.index",
+    ),
+    path(
+        "saved-searches/action",
+        saved_searches_views.action,
+        name="saved_searches.action",
+    ),
     # Tags
     path("tags", tags_views.tags_index, name="tags.index"),
     path("tags/new", tags_views.tag_new, name="tags.new"),

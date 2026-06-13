@@ -221,6 +221,20 @@ class BookmarkBundle(models.Model):
         return self.name
 
 
+class BookmarkSavedSearch(models.Model):
+    name = models.CharField(max_length=256, blank=False)
+    # URL-encoded query string of the captured search params, e.g. "q=python&unread=yes".
+    # Stored page-agnostic so the same saved search can be applied on both the
+    # bookmarks and archived pages.
+    query = models.CharField(max_length=2048, blank=True)
+    date_created = models.DateTimeField(auto_now_add=True, null=False)
+    date_modified = models.DateTimeField(auto_now=True, null=False)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.name
+
+
 class BookmarkSearch:
     SORT_ADDED_ASC = "added_asc"
     SORT_ADDED_DESC = "added_desc"

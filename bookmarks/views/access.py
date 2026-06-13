@@ -1,6 +1,13 @@
 from django.http import Http404
 
-from bookmarks.models import ApiToken, Bookmark, BookmarkAsset, BookmarkBundle, Toast
+from bookmarks.models import (
+    ApiToken,
+    Bookmark,
+    BookmarkAsset,
+    BookmarkBundle,
+    BookmarkSavedSearch,
+    Toast,
+)
 from bookmarks.type_defs import HttpRequest
 
 
@@ -41,6 +48,13 @@ def bundle_write(request: HttpRequest, bundle_id: int | str):
         return BookmarkBundle.objects.get(pk=bundle_id, owner=request.user)
     except (BookmarkBundle.DoesNotExist, ValueError):
         raise Http404("Bundle does not exist") from None
+
+
+def saved_search_write(request: HttpRequest, saved_search_id: int | str):
+    try:
+        return BookmarkSavedSearch.objects.get(pk=saved_search_id, owner=request.user)
+    except (BookmarkSavedSearch.DoesNotExist, ValueError):
+        raise Http404("Saved search does not exist") from None
 
 
 def asset_read(request: HttpRequest, asset_id: int | str):

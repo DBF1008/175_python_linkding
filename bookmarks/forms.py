@@ -6,6 +6,7 @@ from django.utils import timezone
 from bookmarks.models import (
     Bookmark,
     BookmarkBundle,
+    BookmarkSavedSearch,
     BookmarkSearch,
     GlobalSettings,
     Tag,
@@ -240,6 +241,17 @@ class BookmarkBundleForm(forms.ModelForm):
             "filter_unread",
             "filter_shared",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, error_class=FormErrorList)
+
+
+class BookmarkSavedSearchForm(forms.ModelForm):
+    name = forms.CharField(max_length=256, widget=FormInput)
+
+    class Meta:
+        model = BookmarkSavedSearch
+        fields = ["name"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs, error_class=FormErrorList)

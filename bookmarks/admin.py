@@ -17,6 +17,7 @@ from bookmarks.models import (
     Bookmark,
     BookmarkAsset,
     BookmarkBundle,
+    BookmarkSavedSearch,
     FeedToken,
     Tag,
     Toast,
@@ -286,6 +287,18 @@ class AdminBookmarkBundle(admin.ModelAdmin):
     list_filter = ("owner__username",)
 
 
+class AdminBookmarkSavedSearch(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "owner",
+        "query",
+        "date_created",
+        "date_modified",
+    )
+    search_fields = ["name", "query"]
+    list_filter = ("owner__username",)
+
+
 class AdminUserProfileInline(admin.StackedInline):
     model = UserProfile
     can_delete = False
@@ -334,6 +347,7 @@ linkding_admin_site.register(Bookmark, AdminBookmark)
 linkding_admin_site.register(BookmarkAsset, AdminBookmarkAsset)
 linkding_admin_site.register(Tag, AdminTag)
 linkding_admin_site.register(BookmarkBundle, AdminBookmarkBundle)
+linkding_admin_site.register(BookmarkSavedSearch, AdminBookmarkSavedSearch)
 linkding_admin_site.register(User, AdminCustomUser)
 linkding_admin_site.register(ApiToken, AdminApiToken)
 linkding_admin_site.register(Toast, AdminToast)

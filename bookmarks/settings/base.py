@@ -78,6 +78,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "bookmarks.context_processors.toasts",
+                "bookmarks.context_processors.saved_searches",
                 "bookmarks.context_processors.app_version",
             ],
         },
