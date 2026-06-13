@@ -677,3 +677,68 @@ class BookmarkSharedViewTestCase(
         soup = self.make_soup(html)
         tag_menu = soup.find(attrs={"aria-label": "Tags menu"})
         self.assertIsNone(tag_menu)
+
+    def get_rss_feed_href(self, response):
+        soup = self.make_soup(response.content.decode())
+        feed = soup.select_one('head link[type="application/rss+xml"]')
+        self.assertIsNotNone(feed)
+        return feed.attrs["href"]
+
+    def test_rss_feed_url_includes_active_filters(self):
+        self.authenticate()
+        user = self.setup_user(enable_sharing=True)
+        base_url = reverse("linkding:feeds.public_shared")
+
+        # query (tag) filter only
+        response = self.client.get(reverse("linkding:bookmarks.shared") + "?q=%23foo")
+        self.assertEqual(
+            self.get_rss_feed_href(response),
+            base_url + "?" + urllib.parse.urlencode({"q": "#foo"}),
+        )
+
+        # user filter only
+        response = self.client.get(
+            reverse("linkding:bookmarks.shared") + "?user=" + user.username
+        )
+        self.assertEqual(
+            self.get_rss_feed_href(response),
+            base_url + "?" + urllib.parse.urlencode({"user": user.username}),
+        )
+
+        # combined: query string is deterministically q then user
+        response = self.client.get(
+            reverse("linkding:bookmarks.shared") + "?q=%23foo&user=" + user.username
+        )
+        self.assertEqual(
+            self.get_rss_feed_href(response),
+            base_url
+            + "?"
+            + urllib.parse.urlencode({"q": "#foo", "user": user.username}),
+        )
+
+    def test_rss_feed_url_includes_filters_for_public_visitor(self):
+        user = self.setup_user(enable_sharing=True, enable_public_sharing=True)
+
+        url = reverse("linkding:bookmarks.shared") + "?q=%23foo&user=" + user.username
+        response = self.client.get(url)
+        self.assertEqual(
+            self.get_rss_feed_href(response),
+            reverse("linkding:feeds.public_shared")
+            + "?"
+            + urllib.parse.urlencode({"q": "#foo", "user": user.username}),
+        )
+
+    def test_rss_feed_url_excludes_unsafe_params(self):
+        self.authenticate()
+        bundle = self.setup_bundle()
+
+        url = (
+            reverse("linkding:bookmarks.shared") + f"?sort=title_asc&bundle={bundle.id}"
+        )
+        response = self.client.get(url)
+        href = self.get_rss_feed_href(response)
+
+        # bundle/sort are not understood by the public feed and must not leak in
+        self.assertNotIn("bundle=", href)
+        self.assertNotIn("sort=", href)
+        self.assertEqual(href, reverse("linkding:feeds.public_shared"))

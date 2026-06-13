@@ -7,7 +7,7 @@ from django.http import HttpRequest
 from django.urls import reverse
 
 from bookmarks import queries
-from bookmarks.models import Bookmark, BookmarkSearch, FeedToken, UserProfile
+from bookmarks.models import Bookmark, BookmarkSearch, FeedToken, User, UserProfile
 from bookmarks.views import access
 
 
@@ -38,6 +38,7 @@ class BaseBookmarksFeed(Feed):
 
         search = BookmarkSearch(
             q=request.GET.get("q", ""),
+            user=request.GET.get("user", ""),
             unread=request.GET.get("unread", ""),
             shared=request.GET.get("shared", ""),
             bundle=bundle,
@@ -99,8 +100,9 @@ class SharedBookmarksFeed(BaseBookmarksFeed):
     description = "All shared bookmarks"
 
     def get_query_set(self, feed_token: FeedToken, search: BookmarkSearch):
+        user = User.objects.filter(username=search.user).first()
         return queries.query_shared_bookmarks(
-            None, feed_token.user.profile, search, False
+            user, feed_token.user.profile, search, False
         )
 
     def link(self, context: FeedContext):
@@ -115,7 +117,8 @@ class PublicSharedBookmarksFeed(BaseBookmarksFeed):
         return super().get_object(request, None)
 
     def get_query_set(self, feed_token: FeedToken, search: BookmarkSearch):
-        return queries.query_shared_bookmarks(None, UserProfile(), search, True)
+        user = User.objects.filter(username=search.user).first()
+        return queries.query_shared_bookmarks(user, UserProfile(), search, True)
 
     def link(self, context: FeedContext):
         return reverse("linkding:feeds.public_shared")

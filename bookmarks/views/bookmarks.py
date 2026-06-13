@@ -130,6 +130,15 @@ def shared(request: HttpRequest):
         request, contexts.SharedBookmarkDetailsContext
     )
     user_list = contexts.UserListContext(request, search)
+
+    # Forward the active shared-source/tag filters to the discoverable RSS feed so
+    # subscribers get the same narrowed view. Only q and user are forwarded; other
+    # params (e.g. bundle) are not understood by the public feed and would break it.
+    rss_feed_url = reverse("linkding:feeds.public_shared")
+    feed_params = {k: v for k, v in search.query_params.items() if k in ("q", "user")}
+    if feed_params:
+        rss_feed_url += "?" + urllib.parse.urlencode(feed_params)
+
     return render_bookmarks_view(
         request,
         {
@@ -138,7 +147,7 @@ def shared(request: HttpRequest):
             "tag_cloud": tag_cloud,
             "details": bookmark_details,
             "user_list": user_list,
-            "rss_feed_url": reverse("linkding:feeds.public_shared"),
+            "rss_feed_url": rss_feed_url,
         },
     )
 
