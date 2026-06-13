@@ -329,6 +329,67 @@ reddit.com/r/Music music reddit</pre>
         </div>
       {% endif %}
     </section>
+    {# Backup & Restore section #}
+    <section aria-labelledby="backup-heading">
+      <h2 id="backup-heading">Backup &amp; Restore</h2>
+      <p>
+        Export a complete workspace backup including all bookmarks with their full state
+        (unread, shared, archived, notes), tags, bundles, and profile settings.
+        This backup can be restored later to recover your complete linkding workspace.
+      </p>
+      <div class="form-group">
+        <h3>Backup</h3>
+        <p>Download a complete workspace backup.</p>
+        <a class="btn btn-primary"
+           target="_blank"
+           href="{% url 'linkding:settings.backup' %}">Download (.json.gz)</a>
+        {% if backup_error %}
+          <div class="has-error">
+            <p class="form-input-hint">{{ backup_error }}</p>
+          </div>
+        {% endif %}
+      </div>
+      <div class="form-group">
+        <h3>Restore</h3>
+        <p>Restore workspace data from a previously downloaded backup file.</p>
+        <form method="post"
+              enctype="multipart/form-data"
+              action="{% url 'linkding:settings.restore' %}">
+          {% csrf_token %}
+          <div class="form-group">
+            <label for="restore_mode" class="form-label">Restore mode</label>
+            <select id="restore_mode"
+                    name="restore_mode"
+                    class="form-select width-25 width-sm-100">
+              <option value="merge" selected>
+                Merge — Add new and update existing data, keep current data intact
+              </option>
+              <option value="replace">
+                Replace — Delete all current data and restore from backup
+              </option>
+            </select>
+            <div class="form-input-hint">
+              <b>Merge</b> adds bookmarks that don't exist and updates existing ones (matched by URL).
+              Tags and bundles are merged. Profile settings are updated from the backup.
+              <br>
+              <b>Replace</b> deletes all your current bookmarks, tags, and bundles before restoring
+              from the backup. This is useful for a full workspace recovery.
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="input-group width-75 width-md-100">
+              <input class="form-input"
+                     type="file"
+                     name="backup_file"
+                     accept=".json.gz,.json,application/gzip">
+              <input type="submit"
+                     class="input-group-btn btn btn-primary"
+                     value="Restore">
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
     {# About section #}
     <section class="about" aria-labelledby="about-heading">
       <h2 id="about-heading">About</h2>

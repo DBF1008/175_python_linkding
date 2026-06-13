@@ -21,6 +21,7 @@ from bookmarks.models import (
     GlobalSettings,
 )
 from bookmarks.services import exporter, importer, tasks
+from bookmarks.services import workspace_backup, workspace_restore
 from bookmarks.type_defs import HttpRequest
 from bookmarks.utils import app_version
 from bookmarks.views import access
@@ -299,6 +300,87 @@ def bookmark_export(request: HttpRequest):
                 "export_error": "An error occurred during bookmark export."
             },
         )
+
+
+@login_required
+def backup_download(request: HttpRequest):
+    try:
+        file_content = workspace_backup.create_backup(request.user)
+
+        current_time = timezone.now()
+        filename = current_time.strftime("linkding_backup_%Y-%m-%d_%H-%M-%S.json.gz")
+
+        response = HttpResponse(content_type="application/gzip")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response.write(file_content)
+
+        return response
+    except Exception:
+        logging.exception("Error during workspace backup")
+        return general(
+            request,
+            context_overrides={
+                "backup_error": "An error occurred during workspace backup."
+            },
+        )
+
+
+@login_required
+def backup_restore(request: HttpRequest):
+    backup_file = request.FILES.get("backup_file")
+
+    if backup_file is None:
+        messages.error(
+            request, "Please select a backup file to restore.", "settings_error_message"
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    restore_mode = request.POST.get("restore_mode", "merge")
+    options = workspace_restore.RestoreOptions(mode=restore_mode)
+
+    try:
+        data = backup_file.read()
+        result = workspace_restore.restore_backup(data, request.user, options)
+
+        parts = []
+        if result.bookmarks_created:
+            parts.append(f"{result.bookmarks_created} bookmarks created")
+        if result.bookmarks_updated:
+            parts.append(f"{result.bookmarks_updated} bookmarks updated")
+        if result.tags_created:
+            parts.append(f"{result.tags_created} tags created")
+        if result.bundles_created:
+            parts.append(f"{result.bundles_created} bundles created")
+        if result.bundles_updated:
+            parts.append(f"{result.bundles_updated} bundles updated")
+        if result.profile_updated:
+            parts.append("profile restored")
+
+        if parts:
+            success_msg = "Workspace restored: " + ", ".join(parts) + "."
+        else:
+            success_msg = "Workspace restored successfully."
+
+        messages.success(request, success_msg, "settings_success_message")
+
+        if result.bookmarks_failed > 0:
+            err_msg = (
+                f"{result.bookmarks_failed} bookmarks could not be restored. "
+                "Please check the logs for more details."
+            )
+            messages.error(request, err_msg, "settings_error_message")
+
+    except ValueError as e:
+        messages.error(request, str(e), "settings_error_message")
+    except Exception:
+        logging.exception("Unexpected error during workspace restore")
+        messages.error(
+            request,
+            "An error occurred during workspace restore.",
+            "settings_error_message",
+        )
+
+    return HttpResponseRedirect(reverse("linkding:settings.general"))
 
 
 def _find_message_with_tag(messages, tag):
