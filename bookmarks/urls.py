@@ -85,6 +85,11 @@ urlpatterns = [
         name="settings.integrations.delete_api_token",
     ),
     path("settings/import", settings_views.bookmark_import, name="settings.import"),
+    path(
+        "settings/import/confirm",
+        settings_views.bookmark_import_confirm,
+        name="settings.import.confirm",
+    ),
     path("settings/export", settings_views.bookmark_export, name="settings.export"),
     # Toasts
     path("toasts/acknowledge", toasts_views.acknowledge, name="toasts.acknowledge"),

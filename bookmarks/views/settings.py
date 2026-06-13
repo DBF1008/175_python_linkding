@@ -241,10 +241,10 @@ def delete_api_token(request):
 
 @login_required
 def bookmark_import(request: HttpRequest):
+    """Pre-flight step: parse the upload, show a summary, and let the user choose
+    a conflict strategy before anything is written."""
     import_file = request.FILES.get("import_file")
-    import_options = importer.ImportOptions(
-        map_private_flag=request.POST.get("map_private_flag") == "on"
-    )
+    map_private_flag = request.POST.get("map_private_flag") == "on"
 
     if import_file is None:
         messages.error(
@@ -254,9 +254,61 @@ def bookmark_import(request: HttpRequest):
 
     try:
         content = import_file.read().decode()
-        result = importer.import_netscape_html(content, request.user, import_options)
-        success_msg = str(result.success) + " bookmarks were successfully imported."
-        messages.success(request, success_msg, "settings_success_message")
+        preview = importer.preview_netscape_html(content, request.user)
+    except Exception:
+        logging.exception("Unexpected error during bookmark import preview")
+        # Drop any stale preview so the page does not show an outdated summary
+        request.session.pop("import_preview", None)
+        messages.error(
+            request,
+            "An error occurred during bookmark import.",
+            "settings_error_message",
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    # Stash the file so the user can confirm without re-uploading. Sessions are
+    # database-backed, so storing the parsed file content here is fine.
+    request.session["import_preview"] = {
+        "content": content,
+        "map_private_flag": map_private_flag,
+    }
+
+    return general(
+        request,
+        context_overrides={
+            "import_preview": preview,
+            "import_map_private_flag": map_private_flag,
+        },
+    )
+
+
+@login_required
+def bookmark_import_confirm(request: HttpRequest):
+    """Write step: import the previously previewed file using the chosen strategy."""
+    if request.method != "POST":
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    stashed = request.session.pop("import_preview", None)
+    if not stashed:
+        messages.error(
+            request,
+            "No import to confirm. Please upload a file again.",
+            "settings_error_message",
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    import_options = importer.ImportOptions(
+        map_private_flag=stashed.get("map_private_flag", False),
+        strategy=importer.clean_strategy(request.POST.get("strategy")),
+    )
+
+    try:
+        result = importer.import_netscape_html(
+            stashed["content"], request.user, import_options
+        )
+        messages.success(
+            request, _format_import_summary(result), "settings_success_message"
+        )
         if result.failed > 0:
             err_msg = (
                 str(result.failed)
@@ -272,6 +324,13 @@ def bookmark_import(request: HttpRequest):
         )
 
     return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+
+def _format_import_summary(result: importer.ImportResult) -> str:
+    return (
+        f"Import complete: {result.created} added, "
+        f"{result.updated} updated, {result.skipped} skipped."
+    )
 
 
 @login_required

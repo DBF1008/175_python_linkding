@@ -1,0 +1,1 @@
+- [Running tests](running-tests.md) — `uv run pytest`; create `data/` first or huey throws a cryptic sqlite error at import

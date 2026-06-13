@@ -285,36 +285,81 @@ reddit.com/r/Music music reddit</pre>
     {# Import section #}
     <section aria-labelledby="import-heading">
       <h2 id="import-heading">Import</h2>
-      <p>
-        Import bookmarks and tags in the Netscape HTML format. This will execute a sync where new bookmarks are
-        added and existing ones are updated.
-      </p>
-      <form method="post"
-            enctype="multipart/form-data"
-            action="{% url 'linkding:settings.import' %}">
-        {% csrf_token %}
-        <div class="form-group">
-          <label for="import_map_private_flag" class="form-checkbox">
-            <input type="checkbox"
-                   id="import_map_private_flag"
-                   name="map_private_flag"
-                   aria-describedby="import_map_private_flag_help">
-            <i class="form-icon"></i> Import public bookmarks as shared
-          </label>
-          <div id="import_map_private_flag_help" class="form-input-hint">
-            When importing bookmarks from a service that supports marking bookmarks as public or private (using the
-            <code>PRIVATE</code> attribute), enabling this option will import all bookmarks that are marked as not
-            private as shared bookmarks.
-            Otherwise, all bookmarks will be imported as private bookmarks.
+      {% if import_preview %}
+        <p>
+          Review the summary below, choose how to handle bookmarks that already exist,
+          then confirm to apply the import.
+        </p>
+        <table class="table" aria-label="Import summary">
+          <tbody>
+            <tr>
+              <td>New bookmarks</td>
+              <td>{{ import_preview.new }}</td>
+            </tr>
+            <tr>
+              <td>Existing bookmarks (duplicate URLs)</td>
+              <td>{{ import_preview.existing }}</td>
+            </tr>
+            <tr>
+              <td>Invalid bookmarks (cannot be imported)</td>
+              <td>{{ import_preview.invalid }}</td>
+            </tr>
+            <tr>
+              <td><strong>Total in file</strong></td>
+              <td><strong>{{ import_preview.total }}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+        <form method="post" action="{% url 'linkding:settings.import.confirm' %}">
+          {% csrf_token %}
+          <div class="form-group">
+            <label class="form-label" id="import_strategy_label">For bookmarks that already exist</label>
+            <label class="form-radio">
+              <input type="radio" name="strategy" value="update" checked>
+              <i class="form-icon"></i> Update existing bookmarks (default)
+            </label>
+            <label class="form-radio">
+              <input type="radio" name="strategy" value="skip">
+              <i class="form-icon"></i> Skip existing bookmarks, only import new ones
+            </label>
           </div>
-        </div>
-        <div class="form-group">
-          <div class="input-group width-75 width-md-100">
-            <input class="form-input" type="file" name="import_file">
-            <input type="submit" class="input-group-btn btn btn-primary" value="Upload">
+          <div class="form-group">
+            <input type="submit" class="btn btn-primary" value="Confirm import">
+            <a class="btn" href="{% url 'linkding:settings.general' %}">Cancel</a>
           </div>
-        </div>
-      </form>
+        </form>
+      {% else %}
+        <p>
+          Import bookmarks and tags in the Netscape HTML format. You will see a summary of the
+          changes and can choose how to handle duplicates before anything is imported.
+        </p>
+        <form method="post"
+              enctype="multipart/form-data"
+              action="{% url 'linkding:settings.import' %}">
+          {% csrf_token %}
+          <div class="form-group">
+            <label for="import_map_private_flag" class="form-checkbox">
+              <input type="checkbox"
+                     id="import_map_private_flag"
+                     name="map_private_flag"
+                     aria-describedby="import_map_private_flag_help">
+              <i class="form-icon"></i> Import public bookmarks as shared
+            </label>
+            <div id="import_map_private_flag_help" class="form-input-hint">
+              When importing bookmarks from a service that supports marking bookmarks as public or private (using the
+              <code>PRIVATE</code> attribute), enabling this option will import all bookmarks that are marked as not
+              private as shared bookmarks.
+              Otherwise, all bookmarks will be imported as private bookmarks.
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="input-group width-75 width-md-100">
+              <input class="form-input" type="file" name="import_file">
+              <input type="submit" class="input-group-btn btn btn-primary" value="Upload">
+            </div>
+          </div>
+        </form>
+      {% endif %}
     </section>
     {# Export section #}
     <section aria-labelledby="export-heading">

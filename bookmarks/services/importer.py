@@ -12,16 +12,52 @@ from bookmarks.utils import normalize_url, parse_timestamp
 logger = logging.getLogger(__name__)
 
 
+class ImportStrategy:
+    """Strategy for handling bookmarks whose URL already exists for the user."""
+
+    # Update the existing bookmark with the imported data (default sync behaviour)
+    UPDATE = "update"
+    # Leave the existing bookmark untouched and only import new bookmarks
+    SKIP = "skip"
+
+
+VALID_IMPORT_STRATEGIES = (ImportStrategy.UPDATE, ImportStrategy.SKIP)
+
+
+def clean_strategy(strategy: str | None) -> str:
+    """Normalize an arbitrary (e.g. user-submitted) strategy value."""
+    return strategy if strategy in VALID_IMPORT_STRATEGIES else ImportStrategy.UPDATE
+
+
 @dataclass
 class ImportResult:
     total: int = 0
     success: int = 0
     failed: int = 0
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+
+
+@dataclass
+class ImportPreview:
+    """Forecast of what an import would do, computed without writing anything.
+
+    The preview is strategy-independent: ``existing`` bookmarks are the ones that
+    would either be updated or skipped, depending on the strategy chosen at import
+    time. ``invalid`` bookmarks cannot be imported regardless of strategy.
+    """
+
+    total: int = 0
+    new: int = 0
+    existing: int = 0
+    invalid: int = 0
 
 
 @dataclass
 class ImportOptions:
     map_private_flag: bool = False
+    strategy: str = ImportStrategy.UPDATE
 
 
 class TagCache:
@@ -92,6 +128,50 @@ def import_netscape_html(
     return result
 
 
+def preview_netscape_html(html: str, user: User) -> ImportPreview:
+    """Parse the bookmarks file and forecast the import without writing anything.
+
+    Raises if the file cannot be parsed, mirroring import_netscape_html so the
+    caller can surface invalid files before any change is made.
+    """
+    try:
+        netscape_bookmarks = parse(html)
+    except Exception:
+        logging.exception("Could not read bookmarks file.")
+        raise
+
+    preview = ImportPreview()
+
+    # Determine which incoming URLs already exist for the user. Matching is by exact
+    # URL, consistent with how _import_batch identifies existing bookmarks.
+    incoming_urls = [bookmark.href for bookmark in netscape_bookmarks]
+    existing_urls = set(
+        Bookmark.objects.filter(owner=user, url__in=incoming_urls).values_list(
+            "url", flat=True
+        )
+    )
+
+    # map_private_flag does not affect validity, so default options are sufficient here
+    options = ImportOptions()
+    for netscape_bookmark in netscape_bookmarks:
+        preview.total = preview.total + 1
+        # A bookmark that fails validation cannot be imported under any strategy
+        candidate = Bookmark(owner=user)
+        try:
+            _copy_bookmark_data(netscape_bookmark, candidate, options)
+            candidate.clean_fields(exclude=["owner"])
+        except Exception:
+            preview.invalid = preview.invalid + 1
+            continue
+
+        if netscape_bookmark.href in existing_urls:
+            preview.existing = preview.existing + 1
+        else:
+            preview.new = preview.new + 1
+
+    return preview
+
+
 def _create_missing_tags(netscape_bookmarks: list[NetscapeBookmark], user: User):
     tag_cache = TagCache(user)
     tags_to_create = []
@@ -143,6 +223,9 @@ def _import_batch(
     # Create or update bookmarks from parsed Netscape bookmarks
     bookmarks_to_create = []
     bookmarks_to_update = []
+    # URLs that will actually be written in this batch. Used to gate tag assignment
+    # so that duplicates skipped via the conflict strategy keep their existing tags.
+    processed_urls = set()
 
     for netscape_bookmark in netscape_bookmarks:
         result.total = result.total + 1
@@ -156,11 +239,15 @@ def _import_batch(
                 ),
                 None,
             )
+            is_update = bookmark is not None
+
+            # Apply the conflict strategy for existing bookmarks before touching them
+            if is_update and options.strategy == ImportStrategy.SKIP:
+                result.skipped = result.skipped + 1
+                continue
+
             if not bookmark:
                 bookmark = Bookmark(owner=user)
-                is_update = False
-            else:
-                is_update = True
             # Copy data from parsed bookmark
             _copy_bookmark_data(netscape_bookmark, bookmark, options)
             # Validate bookmark fields, exclude owner to prevent n+1 database query,
@@ -169,9 +256,12 @@ def _import_batch(
             # Schedule for update or insert
             if is_update:
                 bookmarks_to_update.append(bookmark)
+                result.updated = result.updated + 1
             else:
                 bookmarks_to_create.append(bookmark)
+                result.created = result.created + 1
 
+            processed_urls.add(netscape_bookmark.href)
             result.success = result.success + 1
         except Exception:
             shortened_bookmark_tag_str = str(netscape_bookmark)[:100] + "..."
@@ -206,6 +296,11 @@ def _import_batch(
     relationships = []
 
     for netscape_bookmark in netscape_bookmarks:
+        # Skip bookmarks that were not written in this batch (skipped duplicates or
+        # bookmarks that failed validation) so their existing tags are left untouched
+        if netscape_bookmark.href not in processed_urls:
+            continue
+
         # Lookup bookmark by URL again
         bookmark = next(
             (
