@@ -51,6 +51,18 @@ def build_tag_string(tag_names: list[str], delimiter: str = ","):
 
 
 class Bookmark(models.Model):
+    # Status of asynchronously collected site metadata (favicon, preview image,
+    # web archive snapshot). An empty value means the metadata has never been
+    # collected, or the corresponding feature is not applicable.
+    METADATA_STATUS_PENDING = "pending"
+    METADATA_STATUS_COMPLETE = "complete"
+    METADATA_STATUS_FAILURE = "failure"
+    METADATA_STATUS_CHOICES = [
+        (METADATA_STATUS_PENDING, "Pending"),
+        (METADATA_STATUS_COMPLETE, "Complete"),
+        (METADATA_STATUS_FAILURE, "Failure"),
+    ]
+
     url = models.CharField(max_length=2048, validators=[BookmarkURLValidator()])
     url_normalized = models.CharField(max_length=2048, blank=True, db_index=True)
     title = models.CharField(max_length=512, blank=True)
@@ -63,6 +75,10 @@ class Bookmark(models.Model):
     web_archive_snapshot_url = models.CharField(max_length=2048, blank=True)
     favicon_file = models.CharField(max_length=512, blank=True)
     preview_image_file = models.CharField(max_length=512, blank=True)
+    # Collection status for the asynchronously loaded metadata above
+    favicon_status = models.CharField(max_length=64, blank=True, default="")
+    preview_image_status = models.CharField(max_length=64, blank=True, default="")
+    web_archive_status = models.CharField(max_length=64, blank=True, default="")
     unread = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
     shared = models.BooleanField(default=False)

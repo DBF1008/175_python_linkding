@@ -9,6 +9,7 @@ from bookmarks.views import assets as assets_views
 from bookmarks.views import auth as linkding_auth_views
 from bookmarks.views import bookmarks as bookmarks_views
 from bookmarks.views import bundles as bundles_views
+from bookmarks.views import metadata as metadata_views
 from bookmarks.views import settings as settings_views
 from bookmarks.views import tags as tags_views
 from bookmarks.views import toasts as toasts_views
@@ -42,6 +43,11 @@ urlpatterns = [
     path("bookmarks/close", bookmarks_views.close, name="bookmarks.close"),
     path(
         "bookmarks/<int:bookmark_id>/edit", bookmarks_views.edit, name="bookmarks.edit"
+    ),
+    # Metadata maintenance center
+    path("metadata", metadata_views.index, name="metadata.index"),
+    path(
+        "metadata/action", metadata_views.action, name="metadata.index.action"
     ),
     # Assets
     path(

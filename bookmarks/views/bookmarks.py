@@ -27,6 +27,7 @@ from bookmarks.services.bookmarks import (
     mark_bookmarks_as_read,
     mark_bookmarks_as_unread,
     refresh_bookmarks_metadata,
+    retry_bookmarks_metadata,
     share_bookmarks,
     tag_bookmarks,
     unarchive_bookmark,
@@ -284,6 +285,13 @@ def create_html_snapshot(request: HttpRequest, bookmark_id: int | str):
     tasks.create_html_snapshot(bookmark)
 
 
+def retry_metadata(request: HttpRequest, bookmark_id: int | str):
+    # Re-run favicon / preview / web-archive collection for a single bookmark.
+    # Scoped to the current user by the service, so it is a no-op for bookmarks
+    # the user does not own.
+    retry_bookmarks_metadata([bookmark_id], request.user)
+
+
 def upload_asset(request: HttpRequest, bookmark_id: int | str):
     if settings.LD_DISABLE_ASSET_UPLOAD:
         return HttpResponseForbidden("Asset upload is disabled")
@@ -376,6 +384,8 @@ def handle_action(request: HttpRequest, query: QuerySet[Bookmark] = None):
         return upload_asset(request, request.POST["upload_asset"])
     if "remove_asset" in request.POST:
         return remove_asset(request, request.POST["remove_asset"])
+    if "retry_metadata" in request.POST:
+        return retry_metadata(request, request.POST["retry_metadata"])
 
     # State updates
     if "update_state" in request.POST:

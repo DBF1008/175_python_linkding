@@ -1,0 +1,148 @@
+{% extends "shared/layout.html" %}
+{% load shared static pagination %}
+{% block head %}
+  {% with page_title="Metadata - Linkding" %}{{ block.super }}{% endwith %}
+{% endblock %}
+{% block content %}
+  <div class="metadata-page crud-page">
+    <main aria-labelledby="main-heading">
+      <div class="crud-header">
+        <h1 id="main-heading">Metadata</h1>
+        {% if metadata_features_enabled and page.paginator.count %}
+          <form method="post"
+                action="{{ action_url }}"
+                class="ml-auto">
+            {% csrf_token %}
+            <input type="hidden" name="bulk_select_across" value="on">
+            <button type="submit"
+                    name="bulk_execute"
+                    value="1"
+                    class="btn"
+                    data-confirm
+                    data-confirm-question="Retry metadata collection for all {{ page.paginator.count }} matching bookmarks?">
+              Retry all {{ page.paginator.count }} matching
+            </button>
+          </form>
+        {% endif %}
+      </div>
+      <p class="text-secondary text-small mt-0">
+        Collection status of asynchronously loaded site metadata (favicon, preview
+        image, web archive snapshot). Use retry to re-run collection for bookmarks
+        that are missing metadata or whose collection failed.
+      </p>
+      {% include 'shared/messages.html' %}
+      {% if not metadata_features_enabled %}
+        <div class="empty">
+          <p class="empty-title h5">Metadata collection is disabled</p>
+          <p class="empty-subtitle">
+            Enable favicons, preview images, or the Internet Archive integration in
+            <a href="{% url 'linkding:settings.general' %}">Settings</a> to start
+            collecting site metadata.
+          </p>
+        </div>
+      {% else %}
+        {# Filter / summary navigation #}
+        <div class="metadata-filters mb-2" role="navigation" aria-label="Status filters">
+          <a class="chip{% if status == filter_all %} active{% endif %}"
+             href="?status={{ filter_all }}{% if search %}&q={{ search|urlencode }}{% endif %}">
+            All <span class="badge" data-count="total">{{ summary.total }}</span>
+          </a>
+          <a class="chip{% if status == filter_attention %} active{% endif %}"
+             href="?status={{ filter_attention }}{% if search %}&q={{ search|urlencode }}{% endif %}">
+            Needs attention <span class="badge" data-count="attention">{{ summary.attention }}</span>
+          </a>
+          <a class="chip{% if status == filter_failed %} active{% endif %}"
+             href="?status={{ filter_failed }}{% if search %}&q={{ search|urlencode }}{% endif %}">
+            Failed <span class="badge" data-count="failed">{{ summary.failed }}</span>
+          </a>
+          <a class="chip{% if status == filter_pending %} active{% endif %}"
+             href="?status={{ filter_pending }}{% if search %}&q={{ search|urlencode }}{% endif %}">
+            Pending <span class="badge" data-count="pending">{{ summary.pending }}</span>
+          </a>
+        </div>
+        {# Search #}
+        <div class="crud-filters">
+          <ld-form data-form-reset>
+            <form method="get" class="mb-2" data-turbo-frame="_top">
+              {% if status != filter_all %}
+                <input type="hidden" name="status" value="{{ status }}">
+              {% endif %}
+              <div class="form-group">
+                <label class="form-label text-assistive" for="search">Search bookmarks</label>
+                <div class="input-group">
+                  <input type="text"
+                         id="search"
+                         name="q"
+                         value="{{ search }}"
+                         placeholder="Search by title or URL..."
+                         class="form-input">
+                  <button type="submit" class="btn input-group-btn">Search</button>
+                </div>
+              </div>
+            </form>
+          </ld-form>
+        </div>
+        {# Bookmark list #}
+        {% if items %}
+          <form method="post" action="{{ action_url }}">
+            {% csrf_token %}
+            <table class="table crud-table metadata-table"
+                   data-bookmarks-total="{{ page.paginator.count }}">
+              <thead>
+                <tr>
+                  <th class="select"><span class="text-assistive">Select</span></th>
+                  <th>Bookmark</th>
+                  <th>Collection status</th>
+                  <th class="actions"><span class="text-assistive">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in items %}
+                  <tr data-bookmark-id="{{ item.id }}">
+                    <td class="select">
+                      <label class="form-checkbox">
+                        <input type="checkbox" name="bookmark_id" value="{{ item.id }}">
+                        <i class="form-icon"></i>
+                      </label>
+                    </td>
+                    <td>
+                      <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>
+                      <div class="text-small text-secondary truncate">{{ item.url }}</div>
+                    </td>
+                    <td>
+                      {% include 'bookmarks/metadata_status.html' with items=item.states.active_items %}
+                    </td>
+                    <td class="actions">
+                      <button type="submit"
+                              name="retry"
+                              value="{{ item.id }}"
+                              class="btn btn-link">Retry</button>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <div class="d-flex gap-2 mt-2">
+              <button type="submit"
+                      name="bulk_execute"
+                      value="1"
+                      class="btn btn-sm">Retry selected</button>
+            </div>
+          </form>
+          {% pagination page %}
+        {% else %}
+          <div class="empty">
+            <p class="empty-title h5">Nothing to show</p>
+            <p class="empty-subtitle">
+              {% if status == filter_all %}
+                You have no bookmarks yet.
+              {% else %}
+                No bookmarks match this filter. Everything looks collected!
+              {% endif %}
+            </p>
+          </div>
+        {% endif %}
+      {% endif %}
+    </main>
+  </div>
+{% endblock %}

@@ -60,6 +60,9 @@
                 <div class="markdown">{% markdown bookmark_item.notes %}</div>
               </div>
             {% endif %}
+            {% if bookmark_list.show_metadata_status and bookmark_item.is_editable %}
+              {% include 'bookmarks/metadata_status.html' with items=bookmark_item.metadata_states.attention_items %}
+            {% endif %}
             <div class="actions">
               {% if bookmark_item.display_date %}
                 {% if bookmark_item.snapshot_url %}

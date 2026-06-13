@@ -206,6 +206,22 @@ def refresh_bookmarks_metadata(bookmark_ids: [int | str], current_user: User):
         tasks.load_preview_image(current_user, bookmark)
 
 
+def retry_bookmarks_metadata(bookmark_ids: [int | str], current_user: User):
+    # Re-run the asynchronous metadata collectors (favicon, preview image, web
+    # archive snapshot) for the given bookmarks. Each collector re-checks its
+    # feature flag and marks the bookmark as pending, providing the unified
+    # retry entry point for the metadata maintenance center.
+    sanitized_bookmark_ids = _sanitize_id_list(bookmark_ids)
+    owned_bookmarks = Bookmark.objects.filter(
+        owner=current_user, id__in=sanitized_bookmark_ids
+    )
+
+    for bookmark in owned_bookmarks:
+        tasks.load_favicon(current_user, bookmark)
+        tasks.load_preview_image(current_user, bookmark)
+        tasks.create_web_archive_snapshot(current_user, bookmark, False)
+
+
 def create_html_snapshots(bookmark_ids: list[int | str], current_user: User):
     sanitized_bookmark_ids = _sanitize_id_list(bookmark_ids)
     owned_bookmarks = Bookmark.objects.filter(

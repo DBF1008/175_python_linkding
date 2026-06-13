@@ -9,6 +9,7 @@ from django.urls import reverse
 
 from bookmarks import queries, utils
 from bookmarks.forms import BookmarkSearchForm
+from bookmarks.metadata import any_metadata_feature_enabled, get_metadata_states
 from bookmarks.models import (
     Bookmark,
     BookmarkAsset,
@@ -164,6 +165,7 @@ class BookmarkItem:
                 )
         self.favicon_file = bookmark.favicon_file
         self.preview_image_file = bookmark.preview_image_file
+        self.metadata_states = get_metadata_states(bookmark, profile)
         self.is_archived = bookmark.is_archived
         self.unread = bookmark.unread
         self.owner = bookmark.owner
@@ -235,6 +237,7 @@ class BookmarkListContext:
         self.show_remove_action = user_profile.display_remove_bookmark_action
         self.show_favicons = user_profile.enable_favicons
         self.show_preview_images = user_profile.enable_preview_images
+        self.show_metadata_status = any_metadata_feature_enabled(user_profile)
         self.show_notes = user_profile.permanent_notes
         self.collapse_side_panel = user_profile.collapse_side_panel
         self.is_preview = False
@@ -586,6 +589,7 @@ class BookmarkDetailsContext:
         self.is_editable = bookmark.owner == user
         self.sharing_enabled = user_profile.enable_sharing
         self.preview_image_enabled = user_profile.enable_preview_images
+        self.metadata_states = get_metadata_states(bookmark, user_profile)
         self.show_link_icons = user_profile.enable_favicons and bookmark.favicon_file
         self.snapshots_enabled = settings.LD_ENABLE_SNAPSHOTS
         self.uploads_enabled = not settings.LD_DISABLE_ASSET_UPLOAD

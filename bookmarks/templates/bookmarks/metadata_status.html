@@ -1,0 +1,18 @@
+{% comment %}
+Renders metadata collection status badges.
+Expects `items` to be a list of MetadataItemState
+(e.g. states.active_items for full status, or states.attention_items for issues only).
+{% endcomment %}
+{% if items %}
+  <span class="metadata-status">
+    {% for item in items %}
+      <span class="metadata-status-item state-{{ item.state }}{% if item.is_failure %} text-error{% elif item.is_pending %} text-tertiary{% endif %}"
+            data-metadata-type="{{ item.type }}"
+            data-metadata-state="{{ item.state }}"
+            title="{{ item.label }}">
+        {{ item.label }}:
+        {% if item.state == 'complete' %}collected{% elif item.state == 'pending' %}queued{% elif item.state == 'failure' %}failed{% elif item.state == 'missing' %}missing{% elif item.state == 'none' %}none available{% else %}{{ item.state }}{% endif %}
+      </span>
+    {% endfor %}
+  </span>
+{% endif %}

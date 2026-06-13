@@ -65,6 +65,9 @@ class BookmarkFactoryMixin:
         web_archive_snapshot_url: str = "",
         favicon_file: str = "",
         preview_image_file: str = "",
+        favicon_status: str = "",
+        preview_image_status: str = "",
+        web_archive_status: str = "",
         added: datetime = None,
         modified: datetime = None,
     ):
@@ -95,6 +98,9 @@ class BookmarkFactoryMixin:
             web_archive_snapshot_url=web_archive_snapshot_url,
             favicon_file=favicon_file,
             preview_image_file=preview_image_file,
+            favicon_status=favicon_status,
+            preview_image_status=preview_image_status,
+            web_archive_status=web_archive_status,
         )
         bookmark.save()
         for tag in tags:

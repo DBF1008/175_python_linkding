@@ -18,6 +18,12 @@ from bookmarks.services.website_loader import DEFAULT_USER_AGENT, load_website_m
 logger = logging.getLogger(__name__)
 
 
+def _set_metadata_status(bookmark_id: int, field: str, status: str):
+    # Targeted single-column update, avoids clobbering concurrent edits to the
+    # bookmark and works even if the in-memory instance is stale
+    Bookmark.objects.filter(id=bookmark_id).update(**{field: status})
+
+
 # Create custom decorator for Huey tasks that implements exponential backoff
 # Taken from: https://huey.readthedocs.io/en/latest/guide.html#tips-and-tricks
 # Retry 1: 60
@@ -59,6 +65,8 @@ def is_web_archive_integration_active(user: User) -> bool:
 
 def create_web_archive_snapshot(user: User, bookmark: Bookmark, force_update: bool):
     if is_web_archive_integration_active(user):
+        bookmark.web_archive_status = Bookmark.METADATA_STATUS_PENDING
+        bookmark.save(update_fields=["web_archive_status"])
         _create_web_archive_snapshot_task(bookmark.id, force_update)
 
 
@@ -87,15 +95,24 @@ def _create_web_archive_snapshot_task(bookmark_id: int, force_update: bool):
     # Create new snapshot
     try:
         _create_snapshot(bookmark)
+        _set_metadata_status(
+            bookmark_id, "web_archive_status", Bookmark.METADATA_STATUS_COMPLETE
+        )
         return
     except TooManyRequestsError:
         logger.error(
             f"Failed to create snapshot due to rate limiting. url={bookmark.url}"
         )
+        _set_metadata_status(
+            bookmark_id, "web_archive_status", Bookmark.METADATA_STATUS_FAILURE
+        )
     except WaybackError as error:
         logger.error(
             f"Failed to create snapshot. url={bookmark.url}",
             exc_info=error,
+        )
+        _set_metadata_status(
+            bookmark_id, "web_archive_status", Bookmark.METADATA_STATUS_FAILURE
         )
 
 
@@ -127,6 +144,8 @@ def is_preview_feature_active(user: User) -> bool:
 
 def load_favicon(user: User, bookmark: Bookmark):
     if is_favicon_feature_active(user):
+        bookmark.favicon_status = Bookmark.METADATA_STATUS_PENDING
+        bookmark.save(update_fields=["favicon_status"])
         _load_favicon_task(bookmark.id)
 
 
@@ -139,14 +158,23 @@ def _load_favicon_task(bookmark_id: int):
 
     logger.info(f"Load favicon for bookmark. url={bookmark.url}")
 
-    new_favicon_file = favicon_loader.load_favicon(bookmark.url)
+    try:
+        new_favicon_file = favicon_loader.load_favicon(bookmark.url)
+    except Exception:
+        _set_metadata_status(
+            bookmark_id, "favicon_status", Bookmark.METADATA_STATUS_FAILURE
+        )
+        raise
 
+    update_fields = ["favicon_status"]
+    bookmark.favicon_status = Bookmark.METADATA_STATUS_COMPLETE
     if new_favicon_file != bookmark.favicon_file:
         bookmark.favicon_file = new_favicon_file
-        bookmark.save(update_fields=["favicon_file"])
+        update_fields.append("favicon_file")
         logger.info(
             f"Successfully updated favicon for bookmark. url={bookmark.url} icon={new_favicon_file}"
         )
+    bookmark.save(update_fields=update_fields)
 
 
 def schedule_bookmarks_without_favicons(user: User):
@@ -158,6 +186,7 @@ def schedule_bookmarks_without_favicons(user: User):
 def _schedule_bookmarks_without_favicons_task(user_id: int):
     user = User.objects.get(id=user_id)
     bookmarks = Bookmark.objects.filter(favicon_file__exact="", owner=user)
+    bookmarks.update(favicon_status=Bookmark.METADATA_STATUS_PENDING)
 
     # TODO: Implement bulk task creation
     for bookmark in bookmarks:
@@ -174,6 +203,7 @@ def schedule_refresh_favicons(user: User):
 def _schedule_refresh_favicons_task(user_id: int):
     user = User.objects.get(id=user_id)
     bookmarks = Bookmark.objects.filter(owner=user)
+    bookmarks.update(favicon_status=Bookmark.METADATA_STATUS_PENDING)
 
     # TODO: Implement bulk task creation
     for bookmark in bookmarks:
@@ -182,6 +212,8 @@ def _schedule_refresh_favicons_task(user_id: int):
 
 def load_preview_image(user: User, bookmark: Bookmark):
     if is_preview_feature_active(user):
+        bookmark.preview_image_status = Bookmark.METADATA_STATUS_PENDING
+        bookmark.save(update_fields=["preview_image_status"])
         _load_preview_image_task(bookmark.id)
 
 
@@ -194,14 +226,25 @@ def _load_preview_image_task(bookmark_id: int):
 
     logger.info(f"Load preview image for bookmark. url={bookmark.url}")
 
-    new_preview_image_file = preview_image_loader.load_preview_image(bookmark.url)
+    try:
+        new_preview_image_file = preview_image_loader.load_preview_image(bookmark.url)
+    except Exception:
+        _set_metadata_status(
+            bookmark_id, "preview_image_status", Bookmark.METADATA_STATUS_FAILURE
+        )
+        raise
 
-    if new_preview_image_file != bookmark.preview_image_file:
-        bookmark.preview_image_file = new_preview_image_file or ""
-        bookmark.save(update_fields=["preview_image_file"])
+    # A None result is a successful run for a site without a preview image
+    update_fields = ["preview_image_status"]
+    bookmark.preview_image_status = Bookmark.METADATA_STATUS_COMPLETE
+    new_value = new_preview_image_file or ""
+    if new_value != bookmark.preview_image_file:
+        bookmark.preview_image_file = new_value
+        update_fields.append("preview_image_file")
         logger.info(
             f"Successfully updated preview image for bookmark. url={bookmark.url} preview_image_file={new_preview_image_file}"
         )
+    bookmark.save(update_fields=update_fields)
 
 
 def schedule_bookmarks_without_previews(user: User):
@@ -216,6 +259,7 @@ def _schedule_bookmarks_without_previews_task(user_id: int):
         Q(preview_image_file__exact=""),
         owner=user,
     )
+    bookmarks.update(preview_image_status=Bookmark.METADATA_STATUS_PENDING)
 
     # TODO: Implement bulk task creation
     for bookmark in bookmarks:
