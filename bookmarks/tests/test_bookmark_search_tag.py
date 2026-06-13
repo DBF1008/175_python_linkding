@@ -164,10 +164,12 @@ class BookmarkSearchTagTest(TestCase, BookmarkFactoryMixin, HtmlTestMixin):
 
         self.assertSelect(preferences_form, "sort", BookmarkSearch.SORT_ADDED_DESC)
         self.assertNoRadioGroup(preferences_form, "shared")
-        self.assertNoRadioGroup(preferences_form, "unread")
+        self.assertRadioGroup(
+            preferences_form, "unread", BookmarkSearch.FILTER_UNREAD_OFF
+        )
 
         # With params
-        url = "/test?q=foo&user=john&sort=title_asc"
+        url = "/test?q=foo&user=john&sort=title_asc&unread=yes"
         rendered_template = self.render_template(url, mode="shared")
         soup = self.make_soup(rendered_template)
         preferences_form = soup.select_one("form#search_preferences")
@@ -180,7 +182,9 @@ class BookmarkSearchTagTest(TestCase, BookmarkFactoryMixin, HtmlTestMixin):
 
         self.assertSelect(preferences_form, "sort", BookmarkSearch.SORT_TITLE_ASC)
         self.assertNoRadioGroup(preferences_form, "shared")
-        self.assertNoRadioGroup(preferences_form, "unread")
+        self.assertRadioGroup(
+            preferences_form, "unread", BookmarkSearch.FILTER_UNREAD_YES
+        )
 
     def test_modified_indicator(self):
         # Without modifications

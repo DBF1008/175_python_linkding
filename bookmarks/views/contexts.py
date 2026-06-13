@@ -245,7 +245,7 @@ class BookmarkListContext:
         query_params = search.query_params
         if page is not None:
             query_params["page"] = page
-        query_string = urllib.parse.urlencode(query_params)
+        query_string = urllib.parse.urlencode(query_params, doseq=True)
 
         return base_url if query_string == "" else base_url + "?" + query_string
 
@@ -255,7 +255,7 @@ class BookmarkListContext:
     ):
         query_params = search.query_params
         query_params["return_url"] = return_url
-        query_string = urllib.parse.urlencode(query_params)
+        query_string = urllib.parse.urlencode(query_params, doseq=True)
 
         return (
             base_action_url

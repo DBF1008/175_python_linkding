@@ -207,7 +207,7 @@ def search_action(request: HttpRequest):
     )
     base_url = request.path
     query_params = search.query_params
-    query_string = urllib.parse.urlencode(query_params)
+    query_string = urllib.parse.urlencode(query_params, doseq=True)
     url = base_url if not query_string else base_url + "?" + query_string
     return HttpResponseRedirect(url)
 

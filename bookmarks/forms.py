@@ -271,6 +271,7 @@ class BookmarkSearchForm(forms.Form):
     unread = forms.ChoiceField(choices=FILTER_UNREAD_CHOICES, widget=forms.RadioSelect)
     modified_since = forms.CharField(required=False)
     added_since = forms.CharField(required=False)
+    tags = forms.CharField(required=False)
 
     def __init__(
         self,
@@ -289,6 +290,10 @@ class BookmarkSearchForm(forms.Form):
             self.fields["user"].choices = user_choices
 
         for param in search.params:
+            if param == "tags":
+                # Tags is a list; serialize as comma-separated string for form field
+                continue
+
             # set initial values for modified params
             value = search.__dict__.get(param)
             if isinstance(value, models.Model):
@@ -301,6 +306,11 @@ class BookmarkSearchForm(forms.Form):
             # all necessary search options are kept when submitting the form.
             if search.is_modified(param) and param not in editable_fields:
                 self.fields[param].widget = forms.HiddenInput()
+
+        # Set tags initial value as comma-separated string
+        if search.tags:
+            self.fields["tags"].initial = ",".join(search.tags)
+            self.fields["tags"].widget = forms.HiddenInput()
 
 
 class UserProfileForm(forms.ModelForm):

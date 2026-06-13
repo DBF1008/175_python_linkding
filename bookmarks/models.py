@@ -244,6 +244,7 @@ class BookmarkSearch:
         "unread",
         "modified_since",
         "added_since",
+        "tags",
     ]
     preferences = ["sort", "shared", "unread"]
     defaults = {
@@ -255,6 +256,7 @@ class BookmarkSearch:
         "unread": FILTER_UNREAD_OFF,
         "modified_since": None,
         "added_since": None,
+        "tags": [],
     }
 
     def __init__(
@@ -267,6 +269,7 @@ class BookmarkSearch:
         unread: str = None,
         modified_since: str = None,
         added_since: str = None,
+        tags: list = None,
         preferences: dict = None,
         request: any = None,
     ):
@@ -283,6 +286,7 @@ class BookmarkSearch:
         self.unread = unread or self.defaults["unread"]
         self.modified_since = modified_since or self.defaults["modified_since"]
         self.added_since = added_since or self.defaults["added_since"]
+        self.tags = tags if tags is not None else self.defaults["tags"]
 
     def is_modified(self, param):
         value = self.__dict__[param]
@@ -315,6 +319,8 @@ class BookmarkSearch:
             value = self.__dict__[param]
             if isinstance(value, models.Model):
                 query_params[param] = value.id
+            elif param == "tags":
+                query_params["tag"] = value
             else:
                 query_params[param] = value
         return query_params
@@ -329,6 +335,23 @@ class BookmarkSearch:
     def from_request(request: any, query_dict: QueryDict, preferences: dict = None):
         initial_values = {}
         for param in BookmarkSearch.params:
+            if param == "tags":
+                # URL param is "tag" (repeatable), field is "tags" (list)
+                raw_tags = query_dict.getlist("tag")
+                if not raw_tags:
+                    # Fall back to comma-separated "tags" field (from POST form)
+                    tags_str = query_dict.get("tags", "")
+                    if tags_str:
+                        raw_tags = [
+                            t.strip() for t in tags_str.split(",") if t.strip()
+                        ]
+                if raw_tags:
+                    sanitized = [
+                        sanitize_tag_name(t) for t in raw_tags if t.strip()
+                    ]
+                    initial_values["tags"] = unique(sanitized, str.lower)
+                continue
+
             value = query_dict.get(param)
             if value:
                 if param == "bundle":

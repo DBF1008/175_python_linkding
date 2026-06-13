@@ -1,13 +1,21 @@
 import unicodedata
 from dataclasses import dataclass
 
+from django.contrib.auth.models import User
 from django.contrib.syndication.views import Feed
 from django.db.models import QuerySet, prefetch_related_objects
 from django.http import HttpRequest
 from django.urls import reverse
 
 from bookmarks import queries
-from bookmarks.models import Bookmark, BookmarkSearch, FeedToken, UserProfile
+from bookmarks.models import (
+    Bookmark,
+    BookmarkSearch,
+    FeedToken,
+    UserProfile,
+    sanitize_tag_name,
+)
+from bookmarks.utils import unique
 from bookmarks.views import access
 
 
@@ -28,6 +36,27 @@ def sanitize(text: str):
     )
 
 
+def _parse_tag_params(request: HttpRequest) -> list:
+    """Parse repeatable 'tag' query params into a deduplicated, sanitized list."""
+    raw_tags = request.GET.getlist("tag")
+    if not raw_tags:
+        return []
+    sanitized = [sanitize_tag_name(t) for t in raw_tags if t.strip()]
+    return unique(sanitized, str.lower)
+
+
+def _build_shared_search(request: HttpRequest) -> BookmarkSearch:
+    """Build a BookmarkSearch for shared feeds with tag, user, and sort support."""
+    return BookmarkSearch(
+        q=request.GET.get("q", ""),
+        unread=request.GET.get("unread", ""),
+        shared=request.GET.get("shared", ""),
+        sort=request.GET.get("sort", ""),
+        user=request.GET.get("user", ""),
+        tags=_parse_tag_params(request),
+    )
+
+
 class BaseBookmarksFeed(Feed):
     def get_object(self, request, feed_key: str | None):
         feed_token = FeedToken.objects.get(key__exact=feed_key) if feed_key else None
@@ -40,7 +69,9 @@ class BaseBookmarksFeed(Feed):
             q=request.GET.get("q", ""),
             unread=request.GET.get("unread", ""),
             shared=request.GET.get("shared", ""),
+            sort=request.GET.get("sort", ""),
             bundle=bundle,
+            tags=_parse_tag_params(request),
         )
         query_set = self.get_query_set(feed_token, search)
         return FeedContext(request, feed_token, query_set)
@@ -98,6 +129,20 @@ class SharedBookmarksFeed(BaseBookmarksFeed):
     title = "Shared bookmarks"
     description = "All shared bookmarks"
 
+    def get_object(self, request, feed_key: str | None):
+        feed_token = FeedToken.objects.get(key__exact=feed_key)
+
+        search = _build_shared_search(request)
+        owner = (
+            User.objects.filter(username=search.user).first()
+            if search.user
+            else None
+        )
+        query_set = queries.query_shared_bookmarks(
+            owner, feed_token.user.profile, search, False
+        )
+        return FeedContext(request, feed_token, query_set)
+
     def get_query_set(self, feed_token: FeedToken, search: BookmarkSearch):
         return queries.query_shared_bookmarks(
             None, feed_token.user.profile, search, False
@@ -112,7 +157,16 @@ class PublicSharedBookmarksFeed(BaseBookmarksFeed):
     description = "All public shared bookmarks"
 
     def get_object(self, request):
-        return super().get_object(request, None)
+        search = _build_shared_search(request)
+        owner = (
+            User.objects.filter(username=search.user).first()
+            if search.user
+            else None
+        )
+        query_set = queries.query_shared_bookmarks(
+            owner, UserProfile(), search, True
+        )
+        return FeedContext(request, None, query_set)
 
     def get_query_set(self, feed_token: FeedToken, search: BookmarkSearch):
         return queries.query_shared_bookmarks(None, UserProfile(), search, True)

@@ -269,6 +269,17 @@ def _base_bookmarks_query(
     if search.bundle:
         query_set = _filter_bundle(query_set, search.bundle)
 
+    # Filter by explicit tags (AND logic)
+    if search.tags:
+        for tag_name in search.tags:
+            query_set = query_set.filter(
+                Exists(
+                    Bookmark.objects.filter(
+                        id=OuterRef("id"), tags__name__iexact=tag_name
+                    )
+                )
+            )
+
     # Sort
     if (
         search.sort == BookmarkSearch.SORT_TITLE_ASC
