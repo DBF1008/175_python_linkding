@@ -86,6 +86,16 @@ urlpatterns = [
     ),
     path("settings/import", settings_views.bookmark_import, name="settings.import"),
     path("settings/export", settings_views.bookmark_export, name="settings.export"),
+    path(
+        "settings/import-backup",
+        settings_views.workspace_import,
+        name="settings.backup_import",
+    ),
+    path(
+        "settings/export-backup",
+        settings_views.workspace_export,
+        name="settings.backup_export",
+    ),
     # Toasts
     path("toasts/acknowledge", toasts_views.acknowledge, name="toasts.acknowledge"),
     # API

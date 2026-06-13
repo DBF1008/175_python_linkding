@@ -20,7 +20,7 @@ from bookmarks.models import (
     FeedToken,
     GlobalSettings,
 )
-from bookmarks.services import exporter, importer, tasks
+from bookmarks.services import exporter, importer, tasks, workspace
 from bookmarks.type_defs import HttpRequest
 from bookmarks.utils import app_version
 from bookmarks.views import access
@@ -299,6 +299,61 @@ def bookmark_export(request: HttpRequest):
                 "export_error": "An error occurred during bookmark export."
             },
         )
+
+
+@login_required
+def workspace_export(request: HttpRequest):
+    # noinspection PyBroadException
+    try:
+        file_content = workspace.export_workspace_json(request.user)
+
+        # Generate filename with current date and time
+        current_time = timezone.now()
+        filename = current_time.strftime("linkding_backup_%Y-%m-%d_%H-%M-%S.json")
+
+        response = HttpResponse(content_type="application/json")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response.write(file_content)
+
+        return response
+    except Exception:
+        return general(
+            request,
+            context_overrides={
+                "workspace_export_error": "An error occurred during backup export."
+            },
+        )
+
+
+@login_required
+def workspace_import(request: HttpRequest):
+    import_file = request.FILES.get("backup_file")
+
+    if import_file is None:
+        messages.error(
+            request, "Please select a file to import.", "settings_error_message"
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    try:
+        content = import_file.read().decode()
+        result = workspace.import_workspace(content, request.user)
+        success_msg = (
+            f"Backup restored: {result.bookmarks_created} bookmarks added, "
+            f"{result.bookmarks_updated} updated, "
+            f"{result.bundles_created} bundles added, "
+            f"{result.bundles_updated} updated."
+        )
+        messages.success(request, success_msg, "settings_success_message")
+    except Exception:
+        logging.exception("Unexpected error during workspace backup import")
+        messages.error(
+            request,
+            "An error occurred while restoring the backup.",
+            "settings_error_message",
+        )
+
+    return HttpResponseRedirect(reverse("linkding:settings.general"))
 
 
 def _find_message_with_tag(messages, tag):

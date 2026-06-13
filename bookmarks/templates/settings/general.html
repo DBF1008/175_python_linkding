@@ -329,6 +329,40 @@ reddit.com/r/Music music reddit</pre>
         </div>
       {% endif %}
     </section>
+    {# Complete backup section #}
+    <section aria-labelledby="backup-heading">
+      <h2 id="backup-heading">Complete backup</h2>
+      <p>
+        Create a complete backup of your workspace as a JSON file. Unlike the Netscape HTML export, this
+        preserves all linkding-specific data, including bookmark notes and their unread, shared and archived
+        states, as well as your tags and bundles. Website snapshots and other downloaded files are not
+        included, as they can be regenerated.
+      </p>
+      <a class="btn btn-primary"
+         target="_blank"
+         href="{% url 'linkding:settings.backup_export' %}">Download (.json)</a>
+      {% if workspace_export_error %}
+        <div class="has-error">
+          <p class="form-input-hint">{{ workspace_export_error }}</p>
+        </div>
+      {% endif %}
+      <p class="mt-4">
+        Restore from a backup. This merges the backup into your workspace: bookmarks that match an existing
+        one by URL are overwritten with the backed-up data, and any new bookmarks, tags and bundles are added.
+        Existing data that is not part of the backup is left untouched.
+      </p>
+      <form method="post"
+            enctype="multipart/form-data"
+            action="{% url 'linkding:settings.backup_import' %}">
+        {% csrf_token %}
+        <div class="form-group">
+          <div class="input-group width-75 width-md-100">
+            <input class="form-input" type="file" name="backup_file">
+            <input type="submit" class="input-group-btn btn btn-primary" value="Restore">
+          </div>
+        </div>
+      </form>
+    </section>
     {# About section #}
     <section class="about" aria-labelledby="about-heading">
       <h2 id="about-heading">About</h2>
