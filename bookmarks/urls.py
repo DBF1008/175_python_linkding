@@ -58,6 +58,7 @@ urlpatterns = [
     path("bundles", bundles_views.index, name="bundles.index"),
     path("bundles/action", bundles_views.action, name="bundles.action"),
     path("bundles/new", bundles_views.new, name="bundles.new"),
+    path("bundles/quick-save", bundles_views.quick_save, name="bundles.quick_save"),
     path("bundles/<int:bundle_id>/edit", bundles_views.edit, name="bundles.edit"),
     path("bundles/preview", bundles_views.preview, name="bundles.preview"),
     # Tags

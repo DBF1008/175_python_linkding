@@ -44,6 +44,67 @@
   }
 }
 
+/* Active filter chip */
+.active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--unit-2);
+  padding: var(--unit-1) var(--unit-3);
+  margin-bottom: var(--unit-3);
+  background: var(--primary-color-light, color-mix(in srgb, var(--primary-color) 15%, transparent));
+  border: 1px solid var(--primary-color);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+
+  .chip-icon {
+    font-size: var(--font-size);
+  }
+
+  .chip-label {
+    color: var(--primary-color);
+    font-weight: 500;
+  }
+
+  .chip-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: var(--unit-1);
+    color: var(--primary-color);
+    text-decoration: none;
+    border-radius: 50%;
+    font-size: var(--font-size);
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s, background-color 0.15s;
+
+    &:hover {
+      opacity: 1;
+      background: var(--primary-color);
+      color: var(--contrast-text-color);
+    }
+  }
+}
+
+/* Divider for dropdown sections */
+.search-options .menu .divider {
+  border-top: 1px solid var(--secondary-border-color);
+  margin: var(--unit-3) 0;
+}
+
+/* Save filter form in dropdown */
+#save_filter_form {
+  .form-group {
+    margin-bottom: var(--unit-3);
+  }
+
+  .btn-block {
+    width: 100%;
+  }
+}
+
 /* Bookmark area header controls */
 .bookmarks-page .search-container {
   flex: 1 1 0;

@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponseRedirect
+from django.db.models import Max
+from django.http import HttpRequest, HttpResponseBadRequest, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 
@@ -117,3 +118,69 @@ def _get_bookmark_list_preview(
     bookmark_list = ActiveBookmarkListContext(request, search)
     bookmark_list.is_preview = True
     return bookmark_list
+
+
+def _map_filter_value(value: str, default: str = BookmarkBundle.FILTER_STATE_OFF) -> str:
+    """Map BookmarkSearch filter values to BookmarkBundle filter values."""
+    if value in (BookmarkBundle.FILTER_STATE_OFF, BookmarkBundle.FILTER_STATE_YES, BookmarkBundle.FILTER_STATE_NO):
+        return value
+    return default
+
+
+@login_required
+def quick_save(request: HttpRequest):
+    """Quick save current search as a named filter (bundle).
+
+    This view allows users to save their current search state directly from
+    the search preferences dropdown without navigating to the bundles page.
+    """
+    if request.method != "POST":
+        return HttpResponseBadRequest("Only POST requests are allowed")
+
+    name = request.POST.get("name", "").strip()
+    bundle_id = request.POST.get("save_filter_bundle_id")
+    return_url = request.POST.get("return_url") or reverse("linkding:bookmarks.index")
+
+    if not name:
+        messages.error(request, "Filter name is required")
+        return HttpResponseRedirect(return_url)
+
+    # Parse current search state from form
+    q = request.POST.get("q", "")
+    parsed = parse_query_string(q)
+    search_terms = parsed.get("search_terms", [])
+    tag_names = parsed.get("tag_names", [])
+
+    # Map preferences to bundle filter values
+    unread = request.POST.get("unread", BookmarkBundle.FILTER_STATE_OFF)
+    shared = request.POST.get("shared", BookmarkBundle.FILTER_STATE_OFF)
+
+    if bundle_id:
+        # Update existing bundle
+        bundle = BookmarkBundle.objects.filter(owner=request.user, pk=bundle_id).first()
+        if not bundle:
+            return HttpResponseNotFound("Bundle not found")
+    else:
+        # Create new bundle
+        bundle = BookmarkBundle(owner=request.user)
+        # Set order for new bundle
+        max_order_result = BookmarkBundle.objects.filter(owner=request.user).aggregate(
+            Max("order", default=-1)
+        )
+        bundle.order = max_order_result["order__max"] + 1
+
+    # Update bundle fields
+    bundle.name = name
+    bundle.search = " ".join(search_terms)
+    bundle.all_tags = " ".join(tag_names)
+    bundle.filter_unread = _map_filter_value(unread)
+    bundle.filter_shared = _map_filter_value(shared)
+
+    bundle.save()
+
+    messages.success(request, f"Filter '{name}' saved successfully")
+
+    # Redirect with bundle param to apply the filter
+    separator = "&" if "?" in return_url else "?"
+    url = f"{return_url}{separator}bundle={bundle.id}"
+    return HttpResponseRedirect(url)

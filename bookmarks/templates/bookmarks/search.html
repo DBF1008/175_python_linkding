@@ -1,4 +1,11 @@
 {% load static shared %}
+{% if active_bundle %}
+<div class="active-filter-chip">
+  <span class="chip-icon">📑</span>
+  <span class="chip-label">{{ active_bundle.name }}</span>
+  <a href="{{ clear_filter_url }}" class="chip-close" aria-label="Clear filter">×</a>
+</div>
+{% endif %}
 <div class="search-container">
   <form id="search" action="" method="get" role="search">
     <ld-search-autocomplete input-name="q"
@@ -73,6 +80,32 @@
         </div>
         {% for hidden_field in preferences_form.hidden_fields %}{{ hidden_field }}{% endfor %}
       </form>
+      {% if request.user.is_authenticated and mode != "shared" %}
+      <div class="divider"></div>
+      <form id="save_filter_form" action="{% url 'linkding:bundles.quick_save' %}" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
+        {% for hidden_field in preferences_form.hidden_fields %}{{ hidden_field }}{% endfor %}
+        <div class="form-group">
+          <label class="form-label text-bold">Save as named filter</label>
+          <input type="text" name="name" class="form-input" placeholder="Filter name..." autocomplete="off">
+        </div>
+        {% if user_bundles %}
+        <div class="form-group">
+          <label class="form-label">Or overwrite existing:</label>
+          <select name="save_filter_bundle_id" class="form-select select-sm">
+            <option value="">-- Create new --</option>
+            {% for bundle in user_bundles %}
+            <option value="{{ bundle.id }}">{{ bundle.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <button type="submit" class="btn btn-sm btn-primary btn-block">
+          💾 Save filter
+        </button>
+      </form>
+      {% endif %}
     </div>
   </ld-dropdown>
 </div>
