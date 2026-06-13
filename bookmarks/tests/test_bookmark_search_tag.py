@@ -182,6 +182,44 @@ class BookmarkSearchTagTest(TestCase, BookmarkFactoryMixin, HtmlTestMixin):
         self.assertNoRadioGroup(preferences_form, "shared")
         self.assertNoRadioGroup(preferences_form, "unread")
 
+    def test_preferences_form_inputs_read_later_mode(self):
+        # Without params
+        url = "/test"
+        rendered_template = self.render_template(url, mode="read_later")
+        soup = self.make_soup(rendered_template)
+        preferences_form = soup.select_one("form#search_preferences")
+
+        self.assertNoHiddenInput(preferences_form, "q")
+        self.assertNoHiddenInput(preferences_form, "user")
+        self.assertNoHiddenInput(preferences_form, "sort")
+        self.assertNoHiddenInput(preferences_form, "shared")
+        self.assertNoHiddenInput(preferences_form, "unread")
+
+        # Sort (time triage) and the shared filter (status triage) are editable,
+        # but the unread filter is omitted because the queue is inherently unread.
+        self.assertSelect(preferences_form, "sort", BookmarkSearch.SORT_ADDED_DESC)
+        self.assertRadioGroup(
+            preferences_form, "shared", BookmarkSearch.FILTER_SHARED_OFF
+        )
+        self.assertNoRadioGroup(preferences_form, "unread")
+
+        # With params
+        url = "/test?q=foo&user=john&sort=title_asc&shared=yes"
+        rendered_template = self.render_template(url, mode="read_later")
+        soup = self.make_soup(rendered_template)
+        preferences_form = soup.select_one("form#search_preferences")
+
+        self.assertHiddenInput(preferences_form, "q", "foo")
+        self.assertHiddenInput(preferences_form, "user", "john")
+        self.assertNoHiddenInput(preferences_form, "sort")
+        self.assertNoHiddenInput(preferences_form, "shared")
+
+        self.assertSelect(preferences_form, "sort", BookmarkSearch.SORT_TITLE_ASC)
+        self.assertRadioGroup(
+            preferences_form, "shared", BookmarkSearch.FILTER_SHARED_SHARED
+        )
+        self.assertNoRadioGroup(preferences_form, "unread")
+
     def test_modified_indicator(self):
         # Without modifications
         url = "/test"

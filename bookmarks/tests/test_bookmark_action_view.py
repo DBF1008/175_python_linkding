@@ -928,6 +928,149 @@ class BookmarkActionViewTestCase(
         self.assertEqual(0, Bookmark.objects.filter(title__startswith="foo").count())
         self.assertEqual(3, Bookmark.objects.filter(title__startswith="bar").count())
 
+    def test_read_later_action_bulk_mark_as_read(self):
+        bookmark1 = self.setup_bookmark(unread=True)
+        bookmark2 = self.setup_bookmark(unread=True)
+        bookmark3 = self.setup_bookmark(unread=True)
+
+        self.client.post(
+            reverse("linkding:bookmarks.read_later.action"),
+            {
+                "bulk_action": ["bulk_read"],
+                "bulk_execute": [""],
+                "bookmark_id": [
+                    str(bookmark1.id),
+                    str(bookmark2.id),
+                    str(bookmark3.id),
+                ],
+            },
+        )
+
+        self.assertFalse(Bookmark.objects.get(id=bookmark1.id).unread)
+        self.assertFalse(Bookmark.objects.get(id=bookmark2.id).unread)
+        self.assertFalse(Bookmark.objects.get(id=bookmark3.id).unread)
+
+    def test_read_later_action_bulk_archive(self):
+        bookmark1 = self.setup_bookmark(unread=True)
+        bookmark2 = self.setup_bookmark(unread=True)
+        bookmark3 = self.setup_bookmark(unread=True)
+
+        self.client.post(
+            reverse("linkding:bookmarks.read_later.action"),
+            {
+                "bulk_action": ["bulk_archive"],
+                "bulk_execute": [""],
+                "bookmark_id": [
+                    str(bookmark1.id),
+                    str(bookmark2.id),
+                    str(bookmark3.id),
+                ],
+            },
+        )
+
+        self.assertTrue(Bookmark.objects.get(id=bookmark1.id).is_archived)
+        self.assertTrue(Bookmark.objects.get(id=bookmark2.id).is_archived)
+        self.assertTrue(Bookmark.objects.get(id=bookmark3.id).is_archived)
+
+    def test_read_later_action_bulk_select_across_only_affects_unread_unarchived(self):
+        self.setup_numbered_bookmarks(3, unread=True, prefix="Unread Bookmark")
+        self.setup_numbered_bookmarks(3, unread=False, prefix="Read Bookmark")
+        self.setup_numbered_bookmarks(
+            3, unread=True, archived=True, prefix="Archived Bookmark"
+        )
+
+        self.client.post(
+            reverse("linkding:bookmarks.read_later.action"),
+            {
+                "bulk_action": ["bulk_delete"],
+                "bulk_execute": [""],
+                "bulk_select_across": ["on"],
+            },
+        )
+
+        # only unread, non-archived bookmarks are affected across all pages
+        self.assertEqual(6, Bookmark.objects.count())
+        self.assertEqual(
+            0, Bookmark.objects.filter(title__startswith="Unread Bookmark").count()
+        )
+        self.assertEqual(
+            3, Bookmark.objects.filter(title__startswith="Read Bookmark").count()
+        )
+        self.assertEqual(
+            3, Bookmark.objects.filter(title__startswith="Archived Bookmark").count()
+        )
+
+    def test_read_later_action_bulk_select_across_respects_query(self):
+        self.setup_numbered_bookmarks(3, unread=True, prefix="foo")
+        self.setup_numbered_bookmarks(3, unread=True, prefix="bar")
+
+        self.assertEqual(3, Bookmark.objects.filter(title__startswith="foo").count())
+
+        self.client.post(
+            reverse("linkding:bookmarks.read_later.action") + "?q=foo",
+            {
+                "bulk_action": ["bulk_delete"],
+                "bulk_execute": [""],
+                "bulk_select_across": ["on"],
+            },
+        )
+
+        self.assertEqual(0, Bookmark.objects.filter(title__startswith="foo").count())
+        self.assertEqual(3, Bookmark.objects.filter(title__startswith="bar").count())
+
+    def test_read_later_action_bulk_select_across_respects_bundle(self):
+        self.setup_numbered_bookmarks(3, unread=True, prefix="foo")
+        self.setup_numbered_bookmarks(3, unread=True, prefix="bar")
+
+        self.assertEqual(3, Bookmark.objects.filter(title__startswith="foo").count())
+
+        bundle = self.setup_bundle(search="foo")
+
+        self.client.post(
+            reverse("linkding:bookmarks.read_later.action") + f"?bundle={bundle.id}",
+            {
+                "bulk_action": ["bulk_delete"],
+                "bulk_execute": [""],
+                "bulk_select_across": ["on"],
+            },
+        )
+
+        self.assertEqual(0, Bookmark.objects.filter(title__startswith="foo").count())
+        self.assertEqual(3, Bookmark.objects.filter(title__startswith="bar").count())
+
+    def test_read_later_action_redirects_to_read_later(self):
+        bookmark = self.setup_bookmark(unread=True)
+
+        response = self.client.post(
+            reverse("linkding:bookmarks.read_later.action"),
+            {
+                "bulk_action": ["bulk_read"],
+                "bulk_execute": [""],
+                "bookmark_id": [str(bookmark.id)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("linkding:bookmarks.read_later"))
+
+    def test_read_later_action_with_turbo_returns_bookmark_update(self):
+        unread_bookmarks = self.setup_numbered_bookmarks(
+            3, unread=True, prefix="Unread"
+        )
+        read_bookmarks = self.setup_numbered_bookmarks(3, unread=False, prefix="Read")
+        archived_bookmarks = self.setup_numbered_bookmarks(
+            3, unread=True, archived=True, prefix="Archived"
+        )
+
+        response = self.client.post(
+            reverse("linkding:bookmarks.read_later.action"),
+            HTTP_ACCEPT="text/vnd.turbo-stream.html",
+        )
+
+        self.assertBookmarkUpdateResponse(response)
+        self.assertVisibleBookmarks(response, unread_bookmarks)
+        self.assertInvisibleBookmarks(response, read_bookmarks + archived_bookmarks)
+
     def test_shared_action_bulk_select_across_not_supported(self):
         self.setup_bulk_edit_scope_test_data()
 

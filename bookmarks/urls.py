@@ -32,6 +32,16 @@ urlpatterns = [
         bookmarks_views.archived_action,
         name="bookmarks.archived.action",
     ),
+    path(
+        "bookmarks/read-later",
+        bookmarks_views.read_later,
+        name="bookmarks.read_later",
+    ),
+    path(
+        "bookmarks/read-later/action",
+        bookmarks_views.read_later_action,
+        name="bookmarks.read_later.action",
+    ),
     path("bookmarks/shared", bookmarks_views.shared, name="bookmarks.shared"),
     path(
         "bookmarks/shared/action",

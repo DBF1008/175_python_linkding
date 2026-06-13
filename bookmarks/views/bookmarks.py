@@ -117,6 +117,52 @@ def archived_update(request: HttpRequest):
     return render_bookmarks_update(request, bookmark_list, tag_cloud, details)
 
 
+def _read_later_search(request: HttpRequest) -> BookmarkSearch:
+    # The reading queue is sorted oldest-first by default so the backlog can be
+    # worked through in the order bookmarks were added. Saved non-sort
+    # preferences are still applied, and an explicit sort in the URL still wins.
+    preferences = {
+        **request.user_profile.search_preferences,
+        "sort": BookmarkSearch.SORT_ADDED_ASC,
+    }
+    return BookmarkSearch.from_request(request, request.GET, preferences)
+
+
+@login_required
+def read_later(request: HttpRequest):
+    if request.method == "POST":
+        return search_action(request)
+
+    search = _read_later_search(request)
+    bookmark_list = contexts.ReadLaterBookmarkListContext(request, search)
+    bundles = contexts.BundlesContext(request)
+    tag_cloud = contexts.ReadLaterTagCloudContext(request, search)
+    bookmark_details = contexts.get_details_context(
+        request, contexts.ReadLaterBookmarkDetailsContext
+    )
+
+    return render_bookmarks_view(
+        request,
+        {
+            "page_title": "Read it later - Linkding",
+            "bookmark_list": bookmark_list,
+            "bundles": bundles,
+            "tag_cloud": tag_cloud,
+            "details": bookmark_details,
+        },
+    )
+
+
+def read_later_update(request: HttpRequest):
+    search = _read_later_search(request)
+    bookmark_list = contexts.ReadLaterBookmarkListContext(request, search)
+    tag_cloud = contexts.ReadLaterTagCloudContext(request, search)
+    details = contexts.get_details_context(
+        request, contexts.ReadLaterBookmarkDetailsContext
+    )
+    return render_bookmarks_update(request, bookmark_list, tag_cloud, details)
+
+
 def shared(request: HttpRequest):
     if request.method == "POST":
         return search_action(request)
@@ -341,6 +387,23 @@ def archived_action(request: HttpRequest):
         return archived_update(request)
 
     return utils.redirect_with_query(request, reverse("linkding:bookmarks.archived"))
+
+
+@login_required
+def read_later_action(request: HttpRequest):
+    search = _read_later_search(request)
+    query = queries.query_read_later_bookmarks(
+        request.user, request.user_profile, search
+    )
+
+    response = handle_action(request, query)
+    if response:
+        return response
+
+    if turbo.accept(request):
+        return read_later_update(request)
+
+    return utils.redirect_with_query(request, reverse("linkding:bookmarks.read_later"))
 
 
 @login_required

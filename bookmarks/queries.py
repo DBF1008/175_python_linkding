@@ -44,6 +44,14 @@ def query_archived_bookmarks(
     return _base_bookmarks_query(user, profile, search).filter(is_archived=True)
 
 
+def query_read_later_bookmarks(
+    user: User, profile: UserProfile, search: BookmarkSearch
+) -> QuerySet:
+    return _base_bookmarks_query(user, profile, search).filter(
+        is_archived=False, unread=True
+    )
+
+
 def query_shared_bookmarks(
     user: User | None,
     profile: UserProfile,
@@ -319,6 +327,16 @@ def query_archived_bookmark_tags(
     user: User, profile: UserProfile, search: BookmarkSearch
 ) -> QuerySet:
     bookmarks_query = query_archived_bookmarks(user, profile, search)
+
+    query_set = Tag.objects.filter(bookmark__in=bookmarks_query)
+
+    return query_set.distinct()
+
+
+def query_read_later_bookmark_tags(
+    user: User, profile: UserProfile, search: BookmarkSearch
+) -> QuerySet:
+    bookmarks_query = query_read_later_bookmarks(user, profile, search)
 
     query_set = Tag.objects.filter(bookmark__in=bookmarks_query)
 

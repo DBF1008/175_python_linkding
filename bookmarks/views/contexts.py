@@ -108,6 +108,21 @@ class ArchivedBookmarksContext(RequestContext):
         )
 
 
+class ReadLaterBookmarksContext(RequestContext):
+    index_view = "linkding:bookmarks.read_later"
+    action_view = "linkding:bookmarks.read_later.action"
+
+    def get_bookmark_query_set(self, search: BookmarkSearch):
+        return queries.query_read_later_bookmarks(
+            self.request.user, self.request.user_profile, search
+        )
+
+    def get_tag_query_set(self, search: BookmarkSearch):
+        return queries.query_read_later_bookmark_tags(
+            self.request.user, self.request.user_profile, search
+        )
+
+
 class SharedBookmarksContext(RequestContext):
     index_view = "linkding:bookmarks.shared"
     action_view = "linkding:bookmarks.shared.action"
@@ -278,6 +293,14 @@ class ArchivedBookmarkListContext(BookmarkListContext):
     bulk_edit_enabled = True
     bulk_edit_disabled_actions = "bulk_archive"
     request_context = ArchivedBookmarksContext
+
+
+class ReadLaterBookmarkListContext(BookmarkListContext):
+    list_title = "Read it later"
+    search_mode = "read_later"
+    bulk_edit_enabled = True
+    bulk_edit_disabled_actions = "bulk_unarchive"
+    request_context = ReadLaterBookmarksContext
 
 
 class SharedBookmarkListContext(BookmarkListContext):
@@ -524,6 +547,17 @@ class ArchivedTagCloudContext(TagCloudContext):
         )
 
 
+class ReadLaterTagCloudContext(TagCloudContext):
+    request_context = ReadLaterBookmarksContext
+
+    def get_selected_tags(self):
+        return list(
+            queries.get_tags_for_query(
+                self.request.user, self.request.user_profile, self.search.q
+            )
+        )
+
+
 class SharedTagCloudContext(TagCloudContext):
     request_context = SharedBookmarksContext
 
@@ -619,6 +653,10 @@ class ActiveBookmarkDetailsContext(BookmarkDetailsContext):
 
 class ArchivedBookmarkDetailsContext(BookmarkDetailsContext):
     request_context = ArchivedBookmarksContext
+
+
+class ReadLaterBookmarkDetailsContext(BookmarkDetailsContext):
+    request_context = ReadLaterBookmarksContext
 
 
 class SharedBookmarkDetailsContext(BookmarkDetailsContext):

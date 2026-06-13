@@ -400,6 +400,44 @@ class QueriesBasicTestCase(TestCase, BookmarkFactoryMixin):
 
         self.assertQueryResult(query, [owned_bookmarks])
 
+    def test_query_read_later_bookmarks_should_return_unread_unarchived_only(self):
+        unread_bookmarks = self.setup_numbered_bookmarks(3, unread=True)
+        self.setup_numbered_bookmarks(3, unread=False)
+        self.setup_numbered_bookmarks(3, unread=True, archived=True)
+        self.setup_numbered_bookmarks(3, unread=False, archived=True)
+
+        query = queries.query_read_later_bookmarks(
+            self.user, self.profile, BookmarkSearch(q="")
+        )
+
+        self.assertCountEqual(list(query), unread_bookmarks)
+
+    def test_query_read_later_bookmarks_should_only_return_user_owned_bookmarks(self):
+        other_user = self.setup_user()
+        owned_bookmarks = [
+            self.setup_bookmark(unread=True),
+            self.setup_bookmark(unread=True),
+            self.setup_bookmark(unread=True),
+        ]
+        self.setup_bookmark(unread=True, user=other_user)
+        self.setup_bookmark(unread=True, user=other_user)
+
+        query = queries.query_read_later_bookmarks(
+            self.user, self.profile, BookmarkSearch(q="")
+        )
+
+        self.assertCountEqual(list(query), owned_bookmarks)
+
+    def test_query_read_later_bookmarks_should_filter_by_query(self):
+        matching_bookmarks = self.setup_numbered_bookmarks(2, unread=True, prefix="foo")
+        self.setup_numbered_bookmarks(2, unread=True, prefix="bar")
+
+        query = queries.query_read_later_bookmarks(
+            self.user, self.profile, BookmarkSearch(q="foo")
+        )
+
+        self.assertCountEqual(list(query), matching_bookmarks)
+
     def test_query_bookmarks_untagged_should_return_untagged_bookmarks_only(self):
         tag = self.setup_tag()
         untagged_bookmark = self.setup_bookmark()
