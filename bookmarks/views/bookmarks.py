@@ -155,6 +155,62 @@ def shared_update(request: HttpRequest):
     return render_bookmarks_update(request, bookmark_list, tag_cloud, details)
 
 
+@login_required
+def unread(request: HttpRequest):
+    if request.method == "POST":
+        return search_action(request)
+
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    bookmark_list = contexts.UnreadBookmarkListContext(request, search)
+    bundles = contexts.BundlesContext(request)
+    tag_cloud = contexts.UnreadTagCloudContext(request, search)
+    bookmark_details = contexts.get_details_context(
+        request, contexts.UnreadBookmarkDetailsContext
+    )
+
+    return render_bookmarks_view(
+        request,
+        {
+            "page_title": "Reading Queue - Linkding",
+            "bookmark_list": bookmark_list,
+            "bundles": bundles,
+            "tag_cloud": tag_cloud,
+            "details": bookmark_details,
+        },
+    )
+
+
+def unread_update(request: HttpRequest):
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    bookmark_list = contexts.UnreadBookmarkListContext(request, search)
+    tag_cloud = contexts.UnreadTagCloudContext(request, search)
+    details = contexts.get_details_context(
+        request, contexts.UnreadBookmarkDetailsContext
+    )
+    return render_bookmarks_update(request, bookmark_list, tag_cloud, details)
+
+
+@login_required
+def unread_action(request: HttpRequest):
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    query = queries.query_unread_bookmarks(request.user, request.user_profile, search)
+
+    response = handle_action(request, query)
+    if response:
+        return response
+
+    if turbo.accept(request):
+        return unread_update(request)
+
+    return utils.redirect_with_query(request, reverse("linkding:bookmarks.unread"))
+
+
 def render_bookmarks_view(request: HttpRequest, context):
     if context["details"]:
         context["page_title"] = "Bookmark details - Linkding"

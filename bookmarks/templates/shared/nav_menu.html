@@ -19,8 +19,8 @@
         </li>
       {% endif %}
       <li class="menu-item">
-        <a href="{% url 'linkding:bookmarks.index' %}?unread=yes"
-           class="menu-link">Unread</a>
+        <a href="{% url 'linkding:bookmarks.unread' %}"
+           class="menu-link">Reading Queue</a>
       </li>
       <li class="menu-item">
         <a href="{% url 'linkding:bookmarks.index' %}?q=!untagged"
@@ -83,8 +83,8 @@
         </li>
       {% endif %}
       <li class="menu-item">
-        <a href="{% url 'linkding:bookmarks.index' %}?unread=yes"
-           class="menu-link">Unread</a>
+        <a href="{% url 'linkding:bookmarks.unread' %}"
+           class="menu-link">Reading Queue</a>
       </li>
       <li class="menu-item">
         <a href="{% url 'linkding:bookmarks.index' %}?q=!untagged"

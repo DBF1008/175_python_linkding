@@ -514,3 +514,16 @@ ld-bookmark-page {
     }
   }
 }
+
+/* Time filter bar (reading queue) */
+.time-filter-bar {
+  display: flex;
+  gap: var(--unit-1);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.time-filter-bar .badge {
+  margin-left: var(--unit-1);
+  font-size: 0.7rem;
+}

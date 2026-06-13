@@ -1,0 +1,11 @@
+{% load static %}
+<div class="time-filter-bar mb-2">
+  {% for filter in bookmark_list.time_filters %}
+    <a href="?{% if filter.value %}added_since={{ filter.value|urlencode }}{% endif %}{% if bookmark_list.search.q %}&q={{ bookmark_list.search.q|urlencode }}{% endif %}{% if bookmark_list.search.sort and bookmark_list.search.sort != 'added_desc' %}&sort={{ bookmark_list.search.sort|urlencode }}{% endif %}"
+       class="btn btn-sm {% if filter.active %}btn-primary{% else %}btn-link{% endif %}"
+       {% if filter.active %}aria-current="true"{% endif %}>
+      {{ filter.label }}
+      <span class="badge">{{ filter.count }}</span>
+    </a>
+  {% endfor %}
+</div>

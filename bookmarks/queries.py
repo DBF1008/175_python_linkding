@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Case, CharField, Exists, OuterRef, Q, QuerySet, When
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import Lower
+from django.utils import timezone
 
 from bookmarks.models import (
     Bookmark,
@@ -55,6 +56,14 @@ def query_shared_bookmarks(
         conditions = conditions & Q(owner__profile__enable_public_sharing=True)
 
     return _base_bookmarks_query(user, profile, search).filter(conditions)
+
+
+def query_unread_bookmarks(
+    user: User, profile: UserProfile, search: BookmarkSearch
+) -> QuerySet:
+    return _base_bookmarks_query(user, profile, search).filter(
+        unread=True, is_archived=False
+    )
 
 
 def _convert_ast_to_q_object(ast_node: SearchExpression, profile: UserProfile) -> Q:
@@ -243,9 +252,17 @@ def _base_bookmarks_query(
 
     # Filter by added_since if provided
     if search.added_since:
-        # If the date format is invalid, ignore the filter
-        with contextlib.suppress(ValidationError):
-            query_set = query_set.filter(date_added__gt=search.added_since)
+        if search.added_since == "__older__":
+            # Special sentinel: show bookmarks added before the current month
+            now = timezone.now()
+            month_start = now.replace(
+                hour=0, minute=0, second=0, microsecond=0, day=1
+            )
+            query_set = query_set.filter(date_added__lt=month_start)
+        else:
+            # If the date format is invalid, ignore the filter
+            with contextlib.suppress(ValidationError):
+                query_set = query_set.filter(date_added__gt=search.added_since)
 
     # Filter by search query
     if profile.legacy_search:
@@ -332,6 +349,16 @@ def query_shared_bookmark_tags(
     public_only: bool,
 ) -> QuerySet:
     bookmarks_query = query_shared_bookmarks(user, profile, search, public_only)
+
+    query_set = Tag.objects.filter(bookmark__in=bookmarks_query)
+
+    return query_set.distinct()
+
+
+def query_unread_bookmark_tags(
+    user: User, profile: UserProfile, search: BookmarkSearch
+) -> QuerySet:
+    bookmarks_query = query_unread_bookmarks(user, profile, search)
 
     query_set = Tag.objects.filter(bookmark__in=bookmarks_query)
 

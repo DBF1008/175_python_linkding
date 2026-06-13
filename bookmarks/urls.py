@@ -38,6 +38,12 @@ urlpatterns = [
         bookmarks_views.shared_action,
         name="bookmarks.shared.action",
     ),
+    path("bookmarks/unread", bookmarks_views.unread, name="bookmarks.unread"),
+    path(
+        "bookmarks/unread/action",
+        bookmarks_views.unread_action,
+        name="bookmarks.unread.action",
+    ),
     path("bookmarks/new", bookmarks_views.new, name="bookmarks.new"),
     path("bookmarks/close", bookmarks_views.close, name="bookmarks.close"),
     path(

@@ -1,5 +1,11 @@
 <div class="empty mt-4">
-  {% if not bookmark_list.query_is_valid %}
+  {% if bookmark_list.list_title == "Reading Queue" %}
+    <p class="empty-title h5">Your reading queue is empty</p>
+    <p class="empty-subtitle">
+      All caught up! Mark bookmarks as unread to add them to your reading queue,
+      or <a href="{% url 'linkding:bookmarks.index' %}">browse all bookmarks</a>.
+    </p>
+  {% elif not bookmark_list.query_is_valid %}
     <p class="empty-title h5">Invalid search query</p>
     <p class="empty-subtitle">
       The search query you entered is not valid. Common reasons are unclosed parentheses or a logical operator (AND, OR,

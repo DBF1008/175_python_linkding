@@ -1,11 +1,13 @@
 import re
 import urllib.parse
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db import models
 from django.http import Http404
 from django.urls import reverse
+from django.utils import timezone
 
 from bookmarks import queries, utils
 from bookmarks.forms import BookmarkSearchForm
@@ -124,6 +126,21 @@ class SharedBookmarksContext(RequestContext):
         public_only = not self.request.user.is_authenticated
         return queries.query_shared_bookmark_tags(
             user, self.request.user_profile, search, public_only
+        )
+
+
+class UnreadBookmarksContext(RequestContext):
+    index_view = "linkding:bookmarks.unread"
+    action_view = "linkding:bookmarks.unread.action"
+
+    def get_bookmark_query_set(self, search: BookmarkSearch):
+        return queries.query_unread_bookmarks(
+            self.request.user, self.request.user_profile, search
+        )
+
+    def get_tag_query_set(self, search: BookmarkSearch):
+        return queries.query_unread_bookmark_tags(
+            self.request.user, self.request.user_profile, search
         )
 
 
@@ -286,6 +303,68 @@ class SharedBookmarkListContext(BookmarkListContext):
     bulk_edit_enabled = False
     bulk_edit_disabled_actions = ""
     request_context = SharedBookmarksContext
+
+
+class UnreadBookmarkListContext(BookmarkListContext):
+    list_title = "Reading Queue"
+    search_mode = ""
+    bulk_edit_enabled = True
+    bulk_edit_disabled_actions = "bulk_unarchive,bulk_unread"
+    request_context = UnreadBookmarksContext
+
+    def __init__(self, request: HttpRequest, search: BookmarkSearch) -> None:
+        super().__init__(request, search)
+
+        # Compute time-based breakdown for the filter chips.
+        # Use a clean search (without added_since) so counts always reflect
+        # the full breakdown regardless of active time filter.
+        base_search = BookmarkSearch(
+            q=search.q,
+            sort=search.sort,
+            bundle=search.bundle,
+            shared=search.shared,
+            unread=search.unread,
+        )
+        base_qs = queries.query_unread_bookmarks(
+            request.user, request.user_profile, base_search
+        )
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=today_start.weekday())
+        month_start = today_start.replace(day=1)
+
+        self.time_filters = [
+            {
+                "label": "All",
+                "value": "",
+                "count": base_qs.count(),
+                "active": not search.added_since,
+            },
+            {
+                "label": "Today",
+                "value": today_start.isoformat(),
+                "count": base_qs.filter(date_added__gte=today_start).count(),
+                "active": search.added_since == today_start.isoformat(),
+            },
+            {
+                "label": "This week",
+                "value": week_start.isoformat(),
+                "count": base_qs.filter(date_added__gte=week_start).count(),
+                "active": search.added_since == week_start.isoformat(),
+            },
+            {
+                "label": "This month",
+                "value": month_start.isoformat(),
+                "count": base_qs.filter(date_added__gte=month_start).count(),
+                "active": search.added_since == month_start.isoformat(),
+            },
+            {
+                "label": "Older",
+                "value": "__older__",
+                "count": base_qs.filter(date_added__lt=month_start).count(),
+                "active": search.added_since == "__older__",
+            },
+        ]
 
 
 class AddTagItem:
@@ -537,6 +616,17 @@ class SharedTagCloudContext(TagCloudContext):
         )
 
 
+class UnreadTagCloudContext(TagCloudContext):
+    request_context = UnreadBookmarksContext
+
+    def get_selected_tags(self):
+        return list(
+            queries.get_tags_for_query(
+                self.request.user, self.request.user_profile, self.search.q
+            )
+        )
+
+
 class BookmarkAssetItem:
     def __init__(self, asset: BookmarkAsset):
         self.asset = asset
@@ -623,6 +713,10 @@ class ArchivedBookmarkDetailsContext(BookmarkDetailsContext):
 
 class SharedBookmarkDetailsContext(BookmarkDetailsContext):
     request_context = SharedBookmarksContext
+
+
+class UnreadBookmarkDetailsContext(BookmarkDetailsContext):
+    request_context = UnreadBookmarksContext
 
 
 def get_details_context(

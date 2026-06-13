@@ -21,6 +21,9 @@
           </ld-filter-drawer-trigger>
         </div>
       </div>
+      {% if bookmark_list.time_filters %}
+        {% include 'bookmarks/time_filter_bar.html' %}
+      {% endif %}
       <form class="bookmark-actions"
             action="{{ bookmark_list.action_url|safe }}"
             method="post"
