@@ -164,6 +164,15 @@ class BookmarkItem:
                 )
         self.favicon_file = bookmark.favicon_file
         self.preview_image_file = bookmark.preview_image_file
+        self.favicon_status = bookmark.favicon_status
+        self.preview_image_status = bookmark.preview_image_status
+        self.show_metadata_status = (
+            (bookmark.favicon_status and bookmark.favicon_status != "complete")
+            or (
+                bookmark.preview_image_status
+                and bookmark.preview_image_status != "complete"
+            )
+        )
         self.is_archived = bookmark.is_archived
         self.unread = bookmark.unread
         self.owner = bookmark.owner
@@ -611,6 +620,10 @@ class BookmarkDetailsContext:
             ),
             None,
         )
+
+        # Metadata collection status
+        self.favicon_status = bookmark.favicon_status
+        self.preview_image_status = bookmark.preview_image_status
 
 
 class ActiveBookmarkDetailsContext(BookmarkDetailsContext):

@@ -150,6 +150,20 @@
                     {% endif %}
                   </div>
                 {% endif %}
+                {% if bookmark_item.show_metadata_status %}
+                  <span class="metadata-status">
+                    {% if bookmark_item.favicon_status == 'pending' %}
+                      <span class="text-tertiary" title="Favicon loading...">⏳ favicon</span>
+                    {% elif bookmark_item.favicon_status == 'failure' %}
+                      <span class="text-error" title="Favicon failed">✗ favicon</span>
+                    {% endif %}
+                    {% if bookmark_item.preview_image_status == 'pending' %}
+                      <span class="text-tertiary" title="Preview loading...">⏳ preview</span>
+                    {% elif bookmark_item.preview_image_status == 'failure' %}
+                      <span class="text-error" title="Preview failed">✗ preview</span>
+                    {% endif %}
+                  </span>
+                {% endif %}
               {% endif %}
             </div>
           </div>

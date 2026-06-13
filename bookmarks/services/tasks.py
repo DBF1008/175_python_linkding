@@ -1,4 +1,5 @@
 import functools
+import inspect
 import logging
 
 import waybackpy
@@ -27,10 +28,23 @@ logger = logging.getLogger(__name__)
 # Retry 5: 15360
 def task(retries=5, retry_delay=15, retry_backoff=4):
     def deco(fn):
+        # Check if the wrapped function accepts a 'task' keyword argument
+        # for accessing Huey task context (e.g. to check remaining retries)
+        sig = inspect.signature(fn)
+        accepts_task = (
+            "task" in sig.parameters
+            or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD
+                for p in sig.parameters.values()
+            )
+        )
+
         @functools.wraps(fn)
         def inner(*args, **kwargs):
             task = kwargs.pop("task")
             try:
+                if accepts_task:
+                    return fn(*args, task=task, **kwargs)
                 return fn(*args, **kwargs)
             except TaskLockedException as exc:
                 # Task locks are currently only used as workaround to enforce
@@ -127,11 +141,13 @@ def is_preview_feature_active(user: User) -> bool:
 
 def load_favicon(user: User, bookmark: Bookmark):
     if is_favicon_feature_active(user):
+        bookmark.favicon_status = "pending"
+        bookmark.save(update_fields=["favicon_status"])
         _load_favicon_task(bookmark.id)
 
 
 @task()
-def _load_favicon_task(bookmark_id: int):
+def _load_favicon_task(bookmark_id: int, task=None):
     try:
         bookmark = Bookmark.objects.get(id=bookmark_id)
     except Bookmark.DoesNotExist:
@@ -139,14 +155,27 @@ def _load_favicon_task(bookmark_id: int):
 
     logger.info(f"Load favicon for bookmark. url={bookmark.url}")
 
-    new_favicon_file = favicon_loader.load_favicon(bookmark.url)
+    bookmark.favicon_status = "pending"
+    bookmark.save(update_fields=["favicon_status"])
 
-    if new_favicon_file != bookmark.favicon_file:
-        bookmark.favicon_file = new_favicon_file
-        bookmark.save(update_fields=["favicon_file"])
+    try:
+        new_favicon_file = favicon_loader.load_favicon(bookmark.url)
+
+        if new_favicon_file != bookmark.favicon_file:
+            bookmark.favicon_file = new_favicon_file
+        bookmark.favicon_status = "complete"
+        bookmark.save(update_fields=["favicon_file", "favicon_status"])
         logger.info(
             f"Successfully updated favicon for bookmark. url={bookmark.url} icon={new_favicon_file}"
         )
+    except Exception as e:
+        logger.error(
+            f"Failed to load favicon for bookmark. url={bookmark.url}", exc_info=e
+        )
+        if task is not None and task.retries == 0:
+            bookmark.favicon_status = "failure"
+            bookmark.save(update_fields=["favicon_status"])
+        raise
 
 
 def schedule_bookmarks_without_favicons(user: User):
@@ -157,7 +186,10 @@ def schedule_bookmarks_without_favicons(user: User):
 @task()
 def _schedule_bookmarks_without_favicons_task(user_id: int):
     user = User.objects.get(id=user_id)
-    bookmarks = Bookmark.objects.filter(favicon_file__exact="", owner=user)
+    bookmarks = Bookmark.objects.filter(
+        Q(favicon_file__exact="") | Q(favicon_status="failure"),
+        owner=user,
+    )
 
     # TODO: Implement bulk task creation
     for bookmark in bookmarks:
@@ -182,11 +214,13 @@ def _schedule_refresh_favicons_task(user_id: int):
 
 def load_preview_image(user: User, bookmark: Bookmark):
     if is_preview_feature_active(user):
+        bookmark.preview_image_status = "pending"
+        bookmark.save(update_fields=["preview_image_status"])
         _load_preview_image_task(bookmark.id)
 
 
 @task()
-def _load_preview_image_task(bookmark_id: int):
+def _load_preview_image_task(bookmark_id: int, task=None):
     try:
         bookmark = Bookmark.objects.get(id=bookmark_id)
     except Bookmark.DoesNotExist:
@@ -194,14 +228,28 @@ def _load_preview_image_task(bookmark_id: int):
 
     logger.info(f"Load preview image for bookmark. url={bookmark.url}")
 
-    new_preview_image_file = preview_image_loader.load_preview_image(bookmark.url)
+    bookmark.preview_image_status = "pending"
+    bookmark.save(update_fields=["preview_image_status"])
 
-    if new_preview_image_file != bookmark.preview_image_file:
-        bookmark.preview_image_file = new_preview_image_file or ""
-        bookmark.save(update_fields=["preview_image_file"])
+    try:
+        new_preview_image_file = preview_image_loader.load_preview_image(bookmark.url)
+
+        if new_preview_image_file != bookmark.preview_image_file:
+            bookmark.preview_image_file = new_preview_image_file or ""
+        bookmark.preview_image_status = "complete"
+        bookmark.save(update_fields=["preview_image_file", "preview_image_status"])
         logger.info(
             f"Successfully updated preview image for bookmark. url={bookmark.url} preview_image_file={new_preview_image_file}"
         )
+    except Exception as e:
+        logger.error(
+            f"Failed to load preview image for bookmark. url={bookmark.url}",
+            exc_info=e,
+        )
+        if task is not None and task.retries == 0:
+            bookmark.preview_image_status = "failure"
+            bookmark.save(update_fields=["preview_image_status"])
+        raise
 
 
 def schedule_bookmarks_without_previews(user: User):
@@ -213,7 +261,7 @@ def schedule_bookmarks_without_previews(user: User):
 def _schedule_bookmarks_without_previews_task(user_id: int):
     user = User.objects.get(id=user_id)
     bookmarks = Bookmark.objects.filter(
-        Q(preview_image_file__exact=""),
+        Q(preview_image_file__exact="") | Q(preview_image_status="failure"),
         owner=user,
     )
 

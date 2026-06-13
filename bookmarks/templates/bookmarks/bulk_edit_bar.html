@@ -23,6 +23,8 @@
     {% endif %}
     <option value="bulk_refresh">Refresh from website</option>
     {% if bookmark_list.snapshot_feature_enabled %}<option value="bulk_snapshot">Create HTML snapshot</option>{% endif %}
+    {% if request.user_profile.enable_favicons %}<option value="bulk_retry_favicons">Retry failed favicons</option>{% endif %}
+    {% if request.user_profile.enable_preview_images %}<option value="bulk_retry_previews">Retry failed preview images</option>{% endif %}
   </select>
   <ld-tag-autocomplete input-name="bulk_tag_string"
                        input-placeholder="Tag names..."

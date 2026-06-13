@@ -87,6 +87,49 @@
           </div>
         </section>
       {% endif %}
+      {% if details.favicon_status or details.preview_image_status %}
+        <section class="metadata col-2">
+          <h3>Metadata</h3>
+          <div class="metadata-status-list">
+            {% if details.favicon_status %}
+              <div class="metadata-status-item d-flex align-center gap-2">
+                <span>Favicon</span>
+                {% if details.favicon_status == 'complete' %}
+                  <span class="text-success">✓ Complete</span>
+                {% elif details.favicon_status == 'pending' %}
+                  <span class="text-tertiary">⏳ Pending</span>
+                {% elif details.favicon_status == 'failure' %}
+                  <span class="text-error">✗ Failed</span>
+                  {% if details.is_editable %}
+                    <button type="submit"
+                            name="retry_favicon"
+                            value="{{ details.bookmark.id }}"
+                            class="btn btn-link btn-sm">Retry</button>
+                  {% endif %}
+                {% endif %}
+              </div>
+            {% endif %}
+            {% if details.preview_image_status %}
+              <div class="metadata-status-item d-flex align-center gap-2">
+                <span>Preview image</span>
+                {% if details.preview_image_status == 'complete' %}
+                  <span class="text-success">✓ Complete</span>
+                {% elif details.preview_image_status == 'pending' %}
+                  <span class="text-tertiary">⏳ Pending</span>
+                {% elif details.preview_image_status == 'failure' %}
+                  <span class="text-error">✗ Failed</span>
+                  {% if details.is_editable %}
+                    <button type="submit"
+                            name="retry_preview_image"
+                            value="{{ details.bookmark.id }}"
+                            class="btn btn-link btn-sm">Retry</button>
+                  {% endif %}
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </section>
+      {% endif %}
       <section class="files col-2">
         <h3>Files</h3>
         <div>{% include 'bookmarks/details/assets.html' %}</div>

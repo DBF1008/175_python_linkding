@@ -206,6 +206,66 @@ def refresh_bookmarks_metadata(bookmark_ids: [int | str], current_user: User):
         tasks.load_preview_image(current_user, bookmark)
 
 
+def retry_failed_favicons(bookmark_ids: list[int | str], current_user: User):
+    """Retry favicon loading for selected bookmarks that are failed or pending
+    without a favicon file."""
+    sanitized_bookmark_ids = _sanitize_id_list(bookmark_ids)
+    owned_bookmarks = Bookmark.objects.filter(
+        owner=current_user, id__in=sanitized_bookmark_ids
+    )
+
+    for bookmark in owned_bookmarks:
+        if (
+            bookmark.favicon_status in ("failure", "pending")
+            and not bookmark.favicon_file
+        ):
+            tasks.load_favicon(current_user, bookmark)
+
+
+def retry_failed_preview_images(bookmark_ids: list[int | str], current_user: User):
+    """Retry preview image loading for selected bookmarks that are failed or
+    pending without a preview image file."""
+    sanitized_bookmark_ids = _sanitize_id_list(bookmark_ids)
+    owned_bookmarks = Bookmark.objects.filter(
+        owner=current_user, id__in=sanitized_bookmark_ids
+    )
+
+    for bookmark in owned_bookmarks:
+        if (
+            bookmark.preview_image_status in ("failure", "pending")
+            and not bookmark.preview_image_file
+        ):
+            tasks.load_preview_image(current_user, bookmark)
+
+
+def retry_all_failed_favicons(current_user: User) -> int:
+    """Retry favicon loading for all bookmarks of the current user that are
+    in failure state. Returns the number of bookmarks queued for retry."""
+    failed = Bookmark.objects.filter(
+        owner=current_user,
+        favicon_status="failure",
+    )
+
+    for bookmark in failed:
+        tasks.load_favicon(current_user, bookmark)
+
+    return failed.count()
+
+
+def retry_all_failed_preview_images(current_user: User) -> int:
+    """Retry preview image loading for all bookmarks of the current user that
+    are in failure state. Returns the number of bookmarks queued for retry."""
+    failed = Bookmark.objects.filter(
+        owner=current_user,
+        preview_image_status="failure",
+    )
+
+    for bookmark in failed:
+        tasks.load_preview_image(current_user, bookmark)
+
+    return failed.count()
+
+
 def create_html_snapshots(bookmark_ids: list[int | str], current_user: User):
     sanitized_bookmark_ids = _sanitize_id_list(bookmark_ids)
     owned_bookmarks = Bookmark.objects.filter(

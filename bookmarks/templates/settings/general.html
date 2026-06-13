@@ -170,6 +170,41 @@ reddit.com/r/Music music reddit</pre>
             Enabling this feature automatically downloads all missing preview images.
           {% endformhelp %}
         </div>
+        {% if request.user_profile.enable_favicons or request.user_profile.enable_preview_images %}
+          <div class="form-group">
+            <span class="form-label">Metadata Health</span>
+            <table class="table">
+              <tbody>
+                {% if request.user_profile.enable_favicons %}
+                  <tr>
+                    <td>Favicons pending</td>
+                    <td>{{ favicon_pending_count }}</td>
+                  </tr>
+                  <tr>
+                    <td>Favicons failed</td>
+                    <td>{{ favicon_failed_count }}</td>
+                  </tr>
+                {% endif %}
+                {% if request.user_profile.enable_preview_images %}
+                  <tr>
+                    <td>Preview images pending</td>
+                    <td>{{ preview_pending_count }}</td>
+                  </tr>
+                  <tr>
+                    <td>Preview images failed</td>
+                    <td>{{ preview_failed_count }}</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+            {% if favicon_failed_count > 0 %}
+              <button class="btn mt-2" name="retry_all_failed_favicons">Retry All Failed Favicons</button>
+            {% endif %}
+            {% if preview_failed_count > 0 %}
+              <button class="btn mt-2" name="retry_all_failed_previews">Retry All Failed Preview Images</button>
+            {% endif %}
+          </div>
+        {% endif %}
         <div class="form-group">
           {% formlabel form.web_archive_integration "Internet Archive integration" %}
           {% formfield form.web_archive_integration has_help=True class="width-25 width-sm-100" %}

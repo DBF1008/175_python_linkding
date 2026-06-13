@@ -62,7 +62,29 @@ class Bookmark(models.Model):
     website_description = models.TextField(blank=True, null=True)
     web_archive_snapshot_url = models.CharField(max_length=2048, blank=True)
     favicon_file = models.CharField(max_length=512, blank=True)
+    favicon_status = models.CharField(
+        max_length=10,
+        choices=[
+            ("", "Not active"),
+            ("pending", "Pending"),
+            ("complete", "Complete"),
+            ("failure", "Failure"),
+        ],
+        default="",
+        blank=True,
+    )
     preview_image_file = models.CharField(max_length=512, blank=True)
+    preview_image_status = models.CharField(
+        max_length=10,
+        choices=[
+            ("", "Not active"),
+            ("pending", "Pending"),
+            ("complete", "Complete"),
+            ("failure", "Failure"),
+        ],
+        default="",
+        blank=True,
+    )
     unread = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
     shared = models.BooleanField(default=False)

@@ -27,6 +27,8 @@ from bookmarks.services.bookmarks import (
     mark_bookmarks_as_read,
     mark_bookmarks_as_unread,
     refresh_bookmarks_metadata,
+    retry_failed_favicons,
+    retry_failed_preview_images,
     share_bookmarks,
     tag_bookmarks,
     unarchive_bookmark,
@@ -284,6 +286,16 @@ def create_html_snapshot(request: HttpRequest, bookmark_id: int | str):
     tasks.create_html_snapshot(bookmark)
 
 
+def retry_favicon(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    tasks.load_favicon(request.user, bookmark)
+
+
+def retry_preview_image(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    tasks.load_preview_image(request.user, bookmark)
+
+
 def upload_asset(request: HttpRequest, bookmark_id: int | str):
     if settings.LD_DISABLE_ASSET_UPLOAD:
         return HttpResponseForbidden("Asset upload is disabled")
@@ -372,6 +384,10 @@ def handle_action(request: HttpRequest, query: QuerySet[Bookmark] = None):
         return unshare(request, request.POST["unshare"])
     if "create_html_snapshot" in request.POST:
         return create_html_snapshot(request, request.POST["create_html_snapshot"])
+    if "retry_favicon" in request.POST:
+        return retry_favicon(request, request.POST["retry_favicon"])
+    if "retry_preview_image" in request.POST:
+        return retry_preview_image(request, request.POST["retry_preview_image"])
     if "upload_asset" in request.POST:
         return upload_asset(request, request.POST["upload_asset"])
     if "remove_asset" in request.POST:
@@ -420,6 +436,10 @@ def handle_action(request: HttpRequest, query: QuerySet[Bookmark] = None):
             return refresh_bookmarks_metadata(bookmark_ids, request.user)
         if bulk_action == "bulk_snapshot":
             return create_html_snapshots(bookmark_ids, request.user)
+        if bulk_action == "bulk_retry_favicons":
+            return retry_failed_favicons(bookmark_ids, request.user)
+        if bulk_action == "bulk_retry_previews":
+            return retry_failed_preview_images(bookmark_ids, request.user)
 
 
 @login_required

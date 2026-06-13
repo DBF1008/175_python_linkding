@@ -21,6 +21,7 @@ from bookmarks.models import (
     GlobalSettings,
 )
 from bookmarks.services import exporter, importer, tasks
+from bookmarks.services import bookmarks as bookmarks_service
 from bookmarks.type_defs import HttpRequest
 from bookmarks.utils import app_version
 from bookmarks.views import access
@@ -48,6 +49,20 @@ def general(request: HttpRequest, status=200, context_overrides=None):
     if context_overrides is None:
         context_overrides = {}
 
+    # Metadata health counts
+    favicon_pending_count = Bookmark.objects.filter(
+        owner=request.user, favicon_status="pending"
+    ).count()
+    favicon_failed_count = Bookmark.objects.filter(
+        owner=request.user, favicon_status="failure"
+    ).count()
+    preview_pending_count = Bookmark.objects.filter(
+        owner=request.user, preview_image_status="pending"
+    ).count()
+    preview_failed_count = Bookmark.objects.filter(
+        owner=request.user, preview_image_status="failure"
+    ).count()
+
     return render(
         request,
         "settings/general.html",
@@ -59,6 +74,10 @@ def general(request: HttpRequest, status=200, context_overrides=None):
             "success_message": success_message,
             "error_message": error_message,
             "version_info": version_info,
+            "favicon_pending_count": favicon_pending_count,
+            "favicon_failed_count": favicon_failed_count,
+            "preview_pending_count": preview_pending_count,
+            "preview_failed_count": preview_failed_count,
             **context_overrides,
         },
         status=status,
@@ -93,6 +112,34 @@ def update(request: HttpRequest):
             else:
                 messages.success(
                     request, "No missing snapshots found.", "settings_success_message"
+                )
+        if "retry_all_failed_favicons" in request.POST:
+            count = bookmarks_service.retry_all_failed_favicons(request.user)
+            if count > 0:
+                messages.success(
+                    request,
+                    f"Queued {count} failed favicons for retry. This may take a while...",
+                    "settings_success_message",
+                )
+            else:
+                messages.success(
+                    request,
+                    "No failed favicons found.",
+                    "settings_success_message",
+                )
+        if "retry_all_failed_previews" in request.POST:
+            count = bookmarks_service.retry_all_failed_preview_images(request.user)
+            if count > 0:
+                messages.success(
+                    request,
+                    f"Queued {count} failed preview images for retry. This may take a while...",
+                    "settings_success_message",
+                )
+            else:
+                messages.success(
+                    request,
+                    "No failed preview images found.",
+                    "settings_success_message",
                 )
 
     return HttpResponseRedirect(reverse("linkding:settings.general"))
