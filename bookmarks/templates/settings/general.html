@@ -286,13 +286,14 @@ reddit.com/r/Music music reddit</pre>
     <section aria-labelledby="import-heading">
       <h2 id="import-heading">Import</h2>
       <p>
-        Import bookmarks and tags in the Netscape HTML format. This will execute a sync where new bookmarks are
-        added and existing ones are updated.
+        Import bookmarks and tags in the Netscape HTML format. Uploaded files are first analyzed to show
+        a summary of new, duplicate, and invalid bookmarks before importing.
       </p>
       <form method="post"
             enctype="multipart/form-data"
             action="{% url 'linkding:settings.import' %}">
         {% csrf_token %}
+        <input type="hidden" name="action" value="precheck">
         <div class="form-group">
           <label for="import_map_private_flag" class="form-checkbox">
             <input type="checkbox"
@@ -310,8 +311,8 @@ reddit.com/r/Music music reddit</pre>
         </div>
         <div class="form-group">
           <div class="input-group width-75 width-md-100">
-            <input class="form-input" type="file" name="import_file">
-            <input type="submit" class="input-group-btn btn btn-primary" value="Upload">
+            <input class="form-input" type="file" name="import_file" accept=".html,.htm">
+            <input type="submit" class="input-group-btn btn btn-primary" value="Check Import">
           </div>
         </div>
       </form>

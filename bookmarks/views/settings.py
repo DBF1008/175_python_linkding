@@ -1,3 +1,4 @@
+import base64
 import logging
 import time
 from functools import lru_cache
@@ -21,11 +22,34 @@ from bookmarks.models import (
     GlobalSettings,
 )
 from bookmarks.services import exporter, importer, tasks
+from bookmarks.services.importer import ImportOptions, ImportPrecheckResult, precheck_import
 from bookmarks.type_defs import HttpRequest
 from bookmarks.utils import app_version
 from bookmarks.views import access
 
 logger = logging.getLogger(__name__)
+
+_IMPORT_SESSION_KEY = "import_file_content"
+_IMPORT_MAX_SIZE = 2 * 1024 * 1024  # 2 MB
+
+
+def _store_upload_in_session(request: HttpRequest, html_content: str) -> None:
+    encoded = base64.b64encode(html_content.encode("utf-8")).decode("ascii")
+    request.session[_IMPORT_SESSION_KEY] = encoded
+
+
+def _get_upload_from_session(request: HttpRequest) -> str | None:
+    encoded = request.session.get(_IMPORT_SESSION_KEY)
+    if not encoded:
+        return None
+    try:
+        return base64.b64decode(encoded.encode("ascii")).decode("utf-8")
+    except Exception:
+        return None
+
+
+def _clear_upload_from_session(request: HttpRequest) -> None:
+    request.session.pop(_IMPORT_SESSION_KEY, None)
 
 
 @login_required
@@ -241,10 +265,24 @@ def delete_api_token(request):
 
 @login_required
 def bookmark_import(request: HttpRequest):
+    action = request.POST.get("action", "")
+
+    # --- Step 2: Confirm import ---
+    if action == "confirm":
+        return _confirm_import(request)
+
+    # --- Step 1: Precheck ---
+    if action == "precheck":
+        return _precheck_import(request)
+
+    # --- Fallback: redirect to settings ---
+    _clear_upload_from_session(request)
+    return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+
+def _precheck_import(request: HttpRequest):
+    """Step 1: Parse uploaded file, show summary, store in session."""
     import_file = request.FILES.get("import_file")
-    import_options = importer.ImportOptions(
-        map_private_flag=request.POST.get("map_private_flag") == "on"
-    )
 
     if import_file is None:
         messages.error(
@@ -254,16 +292,97 @@ def bookmark_import(request: HttpRequest):
 
     try:
         content = import_file.read().decode()
-        result = importer.import_netscape_html(content, request.user, import_options)
-        success_msg = str(result.success) + " bookmarks were successfully imported."
-        messages.success(request, success_msg, "settings_success_message")
-        if result.failed > 0:
-            err_msg = (
-                str(result.failed)
-                + " bookmarks could not be imported. Please check the logs for more details."
-            )
-            messages.error(request, err_msg, "settings_error_message")
+    except UnicodeDecodeError:
+        messages.error(
+            request,
+            "Could not read the uploaded file. Please ensure it is a valid UTF-8 encoded file.",
+            "settings_error_message",
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    if len(content) > _IMPORT_MAX_SIZE:
+        messages.error(
+            request,
+            "The uploaded file is too large. Maximum size is 2 MB.",
+            "settings_error_message",
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    try:
+        precheck = precheck_import(content, request.user)
     except Exception:
+        logging.exception("Unexpected error during bookmark import precheck")
+        messages.error(
+            request,
+            "An error occurred while analyzing the import file.",
+            "settings_error_message",
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    if precheck.total == 0:
+        messages.error(
+            request,
+            "The uploaded file contains no bookmarks.",
+            "settings_error_message",
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    # Store file content and options for step 2
+    _store_upload_in_session(request, content)
+
+    return render(
+        request,
+        "settings/import_precheck.html",
+        {
+            "precheck": precheck,
+            "map_private_flag": request.POST.get("map_private_flag", ""),
+        },
+    )
+
+
+def _confirm_import(request: HttpRequest):
+    """Step 2: Execute import with chosen strategy."""
+    content = _get_upload_from_session(request)
+
+    if not content:
+        messages.error(
+            request,
+            "No import file found. Please upload a file again.",
+            "settings_error_message",
+        )
+        return HttpResponseRedirect(reverse("linkding:settings.general"))
+
+    strategy = request.POST.get("duplicate_handling", "update")
+    if strategy not in ("update", "skip"):
+        strategy = "update"
+
+    import_options = ImportOptions(
+        map_private_flag=request.POST.get("map_private_flag") == "on",
+        duplicate_handling=strategy,
+    )
+
+    try:
+        result = importer.import_netscape_html(content, request.user, import_options)
+        _clear_upload_from_session(request)
+
+        # Build detailed success message
+        parts = []
+        if result.success > 0:
+            parts.append(f"{result.success} imported")
+        if result.skipped > 0:
+            parts.append(f"{result.skipped} skipped")
+        if result.failed > 0:
+            parts.append(f"{result.failed} failed")
+
+        if parts:
+            success_msg = f"Import complete: {', '.join(parts)} out of {result.total} bookmarks."
+        else:
+            success_msg = f"{result.total} bookmarks were processed."
+
+        messages.success(request, success_msg, "settings_success_message")
+
+    except Exception:
+        _clear_upload_from_session(request)
         logging.exception("Unexpected error during bookmark import")
         messages.error(
             request,

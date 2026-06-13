@@ -5,7 +5,11 @@ from django.utils import timezone
 
 from bookmarks.models import Bookmark, Tag, parse_tag_string
 from bookmarks.services import tasks
-from bookmarks.services.importer import ImportOptions, import_netscape_html
+from bookmarks.services.importer import (
+    ImportOptions,
+    import_netscape_html,
+    precheck_import,
+)
 from bookmarks.tests.helpers import (
     BookmarkFactoryMixin,
     BookmarkHtmlTag,
@@ -539,3 +543,193 @@ class ImporterTestCase(TestCase, BookmarkFactoryMixin, ImportTestMixin):
             import_netscape_html(test_html, user)
 
             mock_schedule_bookmarks_without_previews.assert_called_once_with(user)
+
+    # --- Pre-check tests ---
+
+    def test_precheck_all_new(self):
+        """Pure new import: all bookmarks counted as new."""
+        user = self.get_or_create_test_user()
+        html_tags = [
+            BookmarkHtmlTag(href="https://example.com/1", title="One"),
+            BookmarkHtmlTag(href="https://example.com/2", title="Two"),
+            BookmarkHtmlTag(href="https://example.com/3", title="Three"),
+        ]
+        import_html = self.render_html(tags=html_tags)
+
+        result = precheck_import(import_html, user)
+
+        self.assertEqual(result.total, 3)
+        self.assertEqual(result.new_count, 3)
+        self.assertEqual(result.update_count, 0)
+        self.assertEqual(result.skip_count, 0)
+
+    def test_precheck_with_duplicates(self):
+        """Existing bookmarks detected correctly."""
+        user = self.get_or_create_test_user()
+        self.setup_bookmark(url="https://example.com/1", title="Existing", user=user)
+
+        html_tags = [
+            BookmarkHtmlTag(href="https://example.com/1", title="Updated"),
+            BookmarkHtmlTag(href="https://example.com/2", title="New"),
+        ]
+        import_html = self.render_html(tags=html_tags)
+
+        result = precheck_import(import_html, user)
+
+        self.assertEqual(result.total, 2)
+        self.assertEqual(result.new_count, 1)
+        self.assertEqual(result.update_count, 1)
+        self.assertEqual(result.skip_count, 0)
+
+    @disable_logging
+    def test_precheck_with_invalid_urls(self):
+        """Invalid entries counted as skips."""
+        user = self.get_or_create_test_user()
+        html_tags = [
+            BookmarkHtmlTag(href="https://valid.example.com", title="Valid"),
+            BookmarkHtmlTag(href="", title="Empty URL"),
+            BookmarkHtmlTag(href="foo.com", title="Bad URL"),
+        ]
+        import_html = self.render_html(tags=html_tags)
+
+        result = precheck_import(import_html, user)
+
+        self.assertEqual(result.total, 3)
+        self.assertEqual(result.new_count, 1)
+        self.assertEqual(result.update_count, 0)
+        self.assertEqual(result.skip_count, 2)
+
+    def test_precheck_empty_file(self):
+        """Empty HTML file returns zero counts."""
+        user = self.get_or_create_test_user()
+        import_html = self.render_html(tags_html="")
+
+        result = precheck_import(import_html, user)
+
+        self.assertEqual(result.total, 0)
+        self.assertEqual(result.new_count, 0)
+        self.assertEqual(result.update_count, 0)
+        self.assertEqual(result.skip_count, 0)
+
+    def test_precheck_does_not_write_to_database(self):
+        """Precheck must not create or modify any bookmarks."""
+        user = self.get_or_create_test_user()
+        html_tags = [
+            BookmarkHtmlTag(href="https://example.com/1", title="One"),
+        ]
+        import_html = self.render_html(tags=html_tags)
+
+        precheck_import(import_html, user)
+
+        self.assertEqual(Bookmark.objects.count(), 0)
+
+    # --- Duplicate strategy tests ---
+
+    def test_import_with_skip_strategy(self):
+        """Skip strategy leaves existing bookmarks untouched."""
+        user = self.get_or_create_test_user()
+        existing = self.setup_bookmark(
+            url="https://example.com/1",
+            title="Original Title",
+            description="Original Description",
+            user=user,
+        )
+
+        html_tags = [
+            BookmarkHtmlTag(
+                href="https://example.com/1",
+                title="Imported Title",
+                description="Imported Description",
+            ),
+            BookmarkHtmlTag(href="https://example.com/2", title="Brand New"),
+        ]
+        import_html = self.render_html(tags=html_tags)
+        options = ImportOptions(duplicate_handling="skip")
+        result = import_netscape_html(import_html, user, options)
+
+        # Check result counts
+        self.assertEqual(result.total, 2)
+        self.assertEqual(result.success, 1)
+        self.assertEqual(result.skipped, 1)
+
+        # Existing bookmark is untouched
+        existing.refresh_from_db()
+        self.assertEqual(existing.title, "Original Title")
+        self.assertEqual(existing.description, "Original Description")
+
+        # New bookmark was created
+        self.assertEqual(Bookmark.objects.count(), 2)
+        new_bookmark = Bookmark.objects.get(url="https://example.com/2")
+        self.assertEqual(new_bookmark.title, "Brand New")
+
+    def test_import_skip_strategy_does_not_add_tags_to_skipped(self):
+        """Skip strategy does not add new tags to skipped bookmarks."""
+        user = self.get_or_create_test_user()
+        existing_tag = self.setup_tag(name="existing-tag", user=user)
+        existing = self.setup_bookmark(
+            url="https://example.com/1",
+            title="Existing",
+            tags=[existing_tag],
+            user=user,
+        )
+
+        html_tags = [
+            BookmarkHtmlTag(
+                href="https://example.com/1",
+                title="Imported",
+                tags="new-tag",
+            ),
+        ]
+        import_html = self.render_html(tags=html_tags)
+        options = ImportOptions(duplicate_handling="skip")
+        import_netscape_html(import_html, user, options)
+
+        # Bookmark should still only have the original tag
+        existing.refresh_from_db()
+        tag_names = [tag.name for tag in existing.tags.all()]
+        self.assertEqual(tag_names, ["existing-tag"])
+
+    def test_import_default_strategy_is_update(self):
+        """Backward compatibility: no strategy specified = update."""
+        user = self.get_or_create_test_user()
+        existing = self.setup_bookmark(
+            url="https://example.com/1",
+            title="Old Title",
+            user=user,
+        )
+
+        html_tags = [
+            BookmarkHtmlTag(href="https://example.com/1", title="New Title"),
+        ]
+        import_html = self.render_html(tags=html_tags)
+
+        # No options passed — uses default ImportOptions(duplicate_handling="update")
+        result = import_netscape_html(import_html, user)
+
+        self.assertEqual(result.success, 1)
+        self.assertEqual(result.skipped, 0)
+
+        existing.refresh_from_db()
+        self.assertEqual(existing.title, "New Title")
+
+    def test_import_update_strategy_overwrites_existing(self):
+        """Explicit update strategy overwrites existing bookmarks."""
+        user = self.get_or_create_test_user()
+        existing = self.setup_bookmark(
+            url="https://example.com/1",
+            title="Old Title",
+            user=user,
+        )
+
+        html_tags = [
+            BookmarkHtmlTag(href="https://example.com/1", title="New Title"),
+        ]
+        import_html = self.render_html(tags=html_tags)
+        options = ImportOptions(duplicate_handling="update")
+        result = import_netscape_html(import_html, user, options)
+
+        self.assertEqual(result.success, 1)
+        self.assertEqual(result.skipped, 0)
+
+        existing.refresh_from_db()
+        self.assertEqual(existing.title, "New Title")

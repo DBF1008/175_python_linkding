@@ -1,0 +1,84 @@
+{% extends "shared/layout.html" %}
+{% load shared %}
+{% block head %}
+  {% with page_title="Import Preview - Linkding" %}{{ block.super }}{% endwith %}
+{% endblock %}
+{% block content %}
+  <main class="settings-page" aria-labelledby="main-heading">
+    <h1 id="main-heading">Import Preview</h1>
+
+    <p>
+      Your file has been analyzed. Review the summary below and choose how to handle duplicates before importing.
+    </p>
+
+    <section aria-labelledby="summary-heading">
+      <h2 id="summary-heading">Summary</h2>
+      <table class="table">
+        <tbody>
+          <tr>
+            <td>Total bookmarks in file</td>
+            <td><strong>{{ precheck.total }}</strong></td>
+          </tr>
+          <tr>
+            <td>New bookmarks to create</td>
+            <td><strong>{{ precheck.new_count }}</strong></td>
+          </tr>
+          {% if precheck.update_count > 0 %}
+            <tr>
+              <td>Existing bookmarks (duplicates)</td>
+              <td><strong>{{ precheck.update_count }}</strong></td>
+            </tr>
+          {% endif %}
+          {% if precheck.skip_count > 0 %}
+            <tr>
+              <td>Invalid entries to skip</td>
+              <td><strong>{{ precheck.skip_count }}</strong></td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </section>
+
+    <form method="post" action="{% url 'linkding:settings.import' %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="confirm">
+      <input type="hidden" name="map_private_flag" value="{{ map_private_flag }}">
+
+      {% if precheck.update_count > 0 %}
+        <section aria-labelledby="strategy-heading">
+          <h2 id="strategy-heading">Duplicate Handling</h2>
+          <p>
+            {{ precheck.update_count }} bookmarks in the import file already exist. Choose how to handle them:
+          </p>
+          <div class="form-group">
+            <label class="form-radio">
+              <input type="radio"
+                     name="duplicate_handling"
+                     value="update"
+                     checked>
+              <i class="form-icon"></i>
+              <strong>Update existing</strong>
+              <span class="text-gray">— Overwrite title, description, dates, and add tags from the import file</span>
+            </label>
+            <label class="form-radio">
+              <input type="radio" name="duplicate_handling" value="skip">
+              <i class="form-icon"></i>
+              <strong>Skip existing</strong>
+              <span class="text-gray">— Leave existing bookmarks untouched, only import new ones</span>
+            </label>
+          </div>
+        </section>
+      {% else %}
+        <input type="hidden" name="duplicate_handling" value="update">
+        <p class="text-success">
+          All {{ precheck.new_count }} bookmarks are new. No conflicts detected.
+        </p>
+      {% endif %}
+
+      <div class="form-group mt-4">
+        <button type="submit" class="btn btn-primary btn-wide">Confirm Import</button>
+        <a href="{% url 'linkding:settings.general' %}" class="btn btn-link ml-2">Cancel</a>
+      </div>
+    </form>
+  </main>
+{% endblock %}

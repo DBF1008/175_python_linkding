@@ -1,15 +1,20 @@
 import logging
 from dataclasses import dataclass
+from typing import Literal
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from bookmarks.models import Bookmark, Tag
 from bookmarks.services import tasks
 from bookmarks.services.parser import NetscapeBookmark, parse
 from bookmarks.utils import normalize_url, parse_timestamp
+from bookmarks.validators import BookmarkURLValidator
 
 logger = logging.getLogger(__name__)
+
+DuplicateHandling = Literal["update", "skip"]
 
 
 @dataclass
@@ -17,11 +22,21 @@ class ImportResult:
     total: int = 0
     success: int = 0
     failed: int = 0
+    skipped: int = 0
 
 
 @dataclass
 class ImportOptions:
     map_private_flag: bool = False
+    duplicate_handling: DuplicateHandling = "update"
+
+
+@dataclass
+class ImportPrecheckResult:
+    total: int = 0
+    new_count: int = 0
+    update_count: int = 0
+    skip_count: int = 0
 
 
 class TagCache:
@@ -92,6 +107,54 @@ def import_netscape_html(
     return result
 
 
+def precheck_import(html: str, user: User) -> ImportPrecheckResult:
+    """Parse and analyze an import file without writing to the database.
+
+    Returns a summary of what would happen on import: how many bookmarks are
+    new, how many would update existing ones, and how many are invalid.
+    """
+    result = ImportPrecheckResult()
+
+    netscape_bookmarks = parse(html)
+    result.total = len(netscape_bookmarks)
+
+    if not netscape_bookmarks:
+        return result
+
+    url_validator = BookmarkURLValidator()
+
+    # Separate valid from invalid bookmarks
+    valid_bookmarks: list[NetscapeBookmark] = []
+    for bm in netscape_bookmarks:
+        if not bm.href:
+            result.skip_count += 1
+            continue
+        try:
+            url_validator(bm.href)
+            valid_bookmarks.append(bm)
+        except ValidationError:
+            result.skip_count += 1
+
+    if not valid_bookmarks:
+        return result
+
+    # Check which URLs already exist for this user
+    valid_urls = [bm.href for bm in valid_bookmarks]
+    existing_urls = set(
+        Bookmark.objects.filter(owner=user, url__in=valid_urls).values_list(
+            "url", flat=True
+        )
+    )
+
+    for bm in valid_bookmarks:
+        if bm.href in existing_urls:
+            result.update_count += 1
+        else:
+            result.new_count += 1
+
+    return result
+
+
 def _create_missing_tags(netscape_bookmarks: list[NetscapeBookmark], user: User):
     tag_cache = TagCache(user)
     tags_to_create = []
@@ -143,6 +206,7 @@ def _import_batch(
     # Create or update bookmarks from parsed Netscape bookmarks
     bookmarks_to_create = []
     bookmarks_to_update = []
+    skipped_urls = set()
 
     for netscape_bookmark in netscape_bookmarks:
         result.total = result.total + 1
@@ -161,6 +225,13 @@ def _import_batch(
                 is_update = False
             else:
                 is_update = True
+
+            # Skip existing bookmarks when duplicate_handling is "skip"
+            if is_update and options.duplicate_handling == "skip":
+                result.skipped = result.skipped + 1
+                skipped_urls.add(netscape_bookmark.href)
+                continue
+
             # Copy data from parsed bookmark
             _copy_bookmark_data(netscape_bookmark, bookmark, options)
             # Validate bookmark fields, exclude owner to prevent n+1 database query,
@@ -206,6 +277,10 @@ def _import_batch(
     relationships = []
 
     for netscape_bookmark in netscape_bookmarks:
+        # Skip bookmarks that were intentionally skipped (duplicate_handling="skip")
+        if netscape_bookmark.href in skipped_urls:
+            continue
+
         # Lookup bookmark by URL again
         bookmark = next(
             (
