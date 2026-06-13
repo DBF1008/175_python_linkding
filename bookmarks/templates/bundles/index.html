@@ -1,0 +1,123 @@
+{% extends "shared/layout.html" %}
+{% load static %}
+{% block head %}
+  {% with page_title="Bundles - Linkding" %}{{ block.super }}{% endwith %}
+{% endblock %}
+{% block content %}
+  <main class="bundles-page crud-page" aria-labelledby="main-heading">
+    <div class="crud-header">
+      <h1 id="main-heading">Bundles</h1>
+      <a href="{% url 'linkding:bundles.new' %}" class="btn">Add bundle</a>
+    </div>
+    {% include 'shared/messages.html' %}
+    {% if bundles %}
+      <form action="{% url 'linkding:bundles.action' %}" method="post">
+        {% csrf_token %}
+        <table class="table crud-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="actions">
+                <span class="text-assistive">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for bundle in bundles %}
+              <tr data-bundle-id="{{ bundle.id }}" draggable="true">
+                <td>
+                  <div class="d-flex align-center">
+                    <svg class="text-secondary mr-1" width="16" height="16">
+                      <use href="{% static 'icons.svg' %}?v={{ app_version }}#drag"></use>
+                    </svg>
+                    <span>{{ bundle.name }}</span>
+                  </div>
+                </td>
+                <td class="actions">
+                  <a class="btn btn-link"
+                     href="{% url 'linkding:bundles.edit' bundle.id %}">Edit</a>
+                  <button data-confirm
+                          type="submit"
+                          name="remove_bundle"
+                          value="{{ bundle.id }}"
+                          class="btn btn-link">Remove</button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <input type="submit" name="move_bundle" value="" class="d-none">
+        <input type="hidden" name="move_position" value="">
+      </form>
+    {% else %}
+      <div class="empty">
+        <p class="empty-title h5">You have no bundles yet</p>
+        <p class="empty-subtitle">Create your first bundle to get started</p>
+      </div>
+    {% endif %}
+  </main>
+  <script>
+    (function init() {
+      const tableBody = document.querySelector(".crud-table tbody");
+      if (!tableBody) return;
+
+      let draggedElement = null;
+
+      const rows = tableBody.querySelectorAll('tr');
+      rows.forEach((item) => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('dragenter', handleDragEnter);
+      });
+
+      function handleDragStart(e) {
+        draggedElement = this;
+
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.dropEffect = 'move';
+
+        this.classList.add('drag-start');
+        setTimeout(() => {
+          this.classList.remove('drag-start');
+          this.classList.add('dragging');
+        }, 0);
+      }
+
+      function handleDragEnd() {
+        this.classList.remove('dragging');
+
+        const moveBundleInput = document.querySelector('input[name="move_bundle"]');
+        const movePositionInput = document.querySelector('input[name="move_position"]');
+        moveBundleInput.value = draggedElement.getAttribute('data-bundle-id');
+        movePositionInput.value = Array.from(tableBody.children).indexOf(draggedElement);
+
+        const form = this.closest('form');
+        form.requestSubmit(moveBundleInput);
+
+        draggedElement = null;
+      }
+
+      function handleDragOver(e) {
+        if (e.preventDefault) {
+          e.preventDefault();
+        }
+        return false;
+      }
+
+      function handleDragEnter() {
+        if (this !== draggedElement) {
+          const listItems = Array.from(tableBody.children);
+          const draggedIndex = listItems.indexOf(draggedElement);
+          const currentIndex = listItems.indexOf(this);
+
+          if (draggedIndex < currentIndex) {
+            this.insertAdjacentElement('afterend', draggedElement);
+          } else {
+            this.insertAdjacentElement('beforebegin', draggedElement);
+          }
+        }
+      }
+    })();
+  </script>
+{% endblock %}

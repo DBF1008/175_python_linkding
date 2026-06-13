@@ -1,0 +1,427 @@
+import urllib.parse
+
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.db.models import QuerySet
+from django.http import (
+    HttpResponseBadRequest,
+    HttpResponseForbidden,
+    HttpResponseRedirect,
+)
+from django.shortcuts import render
+from django.urls import reverse
+
+from bookmarks import queries, utils
+from bookmarks.forms import BookmarkForm
+from bookmarks.models import (
+    Bookmark,
+    BookmarkSearch,
+)
+from bookmarks.services import assets as asset_actions
+from bookmarks.services import tasks
+from bookmarks.services.bookmarks import (
+    archive_bookmark,
+    archive_bookmarks,
+    create_html_snapshots,
+    delete_bookmarks,
+    mark_bookmarks_as_read,
+    mark_bookmarks_as_unread,
+    refresh_bookmarks_metadata,
+    share_bookmarks,
+    tag_bookmarks,
+    unarchive_bookmark,
+    unarchive_bookmarks,
+    unshare_bookmarks,
+    untag_bookmarks,
+)
+from bookmarks.type_defs import HttpRequest
+from bookmarks.utils import get_safe_return_url
+from bookmarks.views import access, contexts, turbo
+
+
+@login_required
+def index(request: HttpRequest):
+    if request.method == "POST":
+        return search_action(request)
+
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    bookmark_list = contexts.ActiveBookmarkListContext(request, search)
+    bundles = contexts.BundlesContext(request)
+    tag_cloud = contexts.ActiveTagCloudContext(request, search)
+    bookmark_details = contexts.get_details_context(
+        request, contexts.ActiveBookmarkDetailsContext
+    )
+
+    return render_bookmarks_view(
+        request,
+        {
+            "page_title": "Bookmarks - Linkding",
+            "bookmark_list": bookmark_list,
+            "bundles": bundles,
+            "tag_cloud": tag_cloud,
+            "details": bookmark_details,
+        },
+    )
+
+
+def index_update(request: HttpRequest):
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    bookmark_list = contexts.ActiveBookmarkListContext(request, search)
+    tag_cloud = contexts.ActiveTagCloudContext(request, search)
+    details = contexts.get_details_context(
+        request, contexts.ActiveBookmarkDetailsContext
+    )
+    return render_bookmarks_update(request, bookmark_list, tag_cloud, details)
+
+
+@login_required
+def archived(request: HttpRequest):
+    if request.method == "POST":
+        return search_action(request)
+
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    bookmark_list = contexts.ArchivedBookmarkListContext(request, search)
+    bundles = contexts.BundlesContext(request)
+    tag_cloud = contexts.ArchivedTagCloudContext(request, search)
+    bookmark_details = contexts.get_details_context(
+        request, contexts.ArchivedBookmarkDetailsContext
+    )
+
+    return render_bookmarks_view(
+        request,
+        {
+            "page_title": "Archived bookmarks - Linkding",
+            "bookmark_list": bookmark_list,
+            "bundles": bundles,
+            "tag_cloud": tag_cloud,
+            "details": bookmark_details,
+        },
+    )
+
+
+def archived_update(request: HttpRequest):
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    bookmark_list = contexts.ArchivedBookmarkListContext(request, search)
+    tag_cloud = contexts.ArchivedTagCloudContext(request, search)
+    details = contexts.get_details_context(
+        request, contexts.ArchivedBookmarkDetailsContext
+    )
+    return render_bookmarks_update(request, bookmark_list, tag_cloud, details)
+
+
+def shared(request: HttpRequest):
+    if request.method == "POST":
+        return search_action(request)
+
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    bookmark_list = contexts.SharedBookmarkListContext(request, search)
+    tag_cloud = contexts.SharedTagCloudContext(request, search)
+    bookmark_details = contexts.get_details_context(
+        request, contexts.SharedBookmarkDetailsContext
+    )
+    user_list = contexts.UserListContext(request, search)
+    return render_bookmarks_view(
+        request,
+        {
+            "page_title": "Shared bookmarks - Linkding",
+            "bookmark_list": bookmark_list,
+            "tag_cloud": tag_cloud,
+            "details": bookmark_details,
+            "user_list": user_list,
+            "rss_feed_url": reverse("linkding:feeds.public_shared"),
+        },
+    )
+
+
+def shared_update(request: HttpRequest):
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    bookmark_list = contexts.SharedBookmarkListContext(request, search)
+    tag_cloud = contexts.SharedTagCloudContext(request, search)
+    details = contexts.get_details_context(
+        request, contexts.SharedBookmarkDetailsContext
+    )
+    return render_bookmarks_update(request, bookmark_list, tag_cloud, details)
+
+
+def render_bookmarks_view(request: HttpRequest, context):
+    if context["details"]:
+        context["page_title"] = "Bookmark details - Linkding"
+
+    if turbo.is_frame(request, "details-modal"):
+        return turbo.frame(request, "bookmarks/details/modal.html", context)
+
+    return render(
+        request,
+        "bookmarks/bookmark_page.html",
+        context,
+    )
+
+
+def render_bookmarks_update(request, bookmark_list, tag_cloud, details):
+    return turbo.stream(
+        turbo.update(
+            request,
+            "bookmark-list-container",
+            "bookmarks/bookmark_list.html",
+            {"bookmark_list": bookmark_list},
+        ),
+        turbo.update(
+            request,
+            "tag-cloud-container",
+            "bookmarks/tag_cloud.html",
+            {"tag_cloud": tag_cloud},
+        ),
+        turbo.replace(
+            request,
+            "details-modal",
+            "bookmarks/details/modal.html",
+            {"details": details},
+            method="morph",
+        ),
+    )
+
+
+def search_action(request: HttpRequest):
+    if "save" in request.POST:
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        search = BookmarkSearch.from_request(request, request.POST)
+        request.user_profile.search_preferences = search.preferences_dict
+        request.user_profile.save()
+
+    # redirect to base url including new query params
+    search = BookmarkSearch.from_request(
+        request, request.POST, request.user_profile.search_preferences
+    )
+    base_url = request.path
+    query_params = search.query_params
+    query_string = urllib.parse.urlencode(query_params)
+    url = base_url if not query_string else base_url + "?" + query_string
+    return HttpResponseRedirect(url)
+
+
+def convert_tag_string(tag_string: str):
+    # Tag strings coming from inputs are space-separated, however services.bookmarks functions expect comma-separated
+    # strings
+    return tag_string.replace(" ", ",")
+
+
+@login_required
+def new(request: HttpRequest):
+    form = BookmarkForm(request)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        if form.is_auto_close:
+            return HttpResponseRedirect(reverse("linkding:bookmarks.close"))
+        else:
+            return HttpResponseRedirect(reverse("linkding:bookmarks.index"))
+
+    status = 422 if request.method == "POST" and not form.is_valid() else 200
+    context = {"form": form, "return_url": reverse("linkding:bookmarks.index")}
+
+    return render(request, "bookmarks/new.html", context, status=status)
+
+
+@login_required
+def edit(request: HttpRequest, bookmark_id: int):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    form = BookmarkForm(request, instance=bookmark)
+    return_url = get_safe_return_url(
+        request.GET.get("return_url"), reverse("linkding:bookmarks.index")
+    )
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return HttpResponseRedirect(return_url)
+
+    status = 422 if request.method == "POST" and not form.is_valid() else 200
+    context = {"form": form, "bookmark_id": bookmark_id, "return_url": return_url}
+
+    return render(request, "bookmarks/edit.html", context, status=status)
+
+
+def remove(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    bookmark.delete()
+
+
+def archive(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    archive_bookmark(bookmark)
+
+
+def unarchive(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    unarchive_bookmark(bookmark)
+
+
+def unshare(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    bookmark.shared = False
+    bookmark.save()
+
+
+def mark_as_read(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    bookmark.unread = False
+    bookmark.save()
+
+
+def create_html_snapshot(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    tasks.create_html_snapshot(bookmark)
+
+
+def upload_asset(request: HttpRequest, bookmark_id: int | str):
+    if settings.LD_DISABLE_ASSET_UPLOAD:
+        return HttpResponseForbidden("Asset upload is disabled")
+
+    bookmark = access.bookmark_write(request, bookmark_id)
+    file = request.FILES.get("upload_asset_file")
+    if not file:
+        return HttpResponseBadRequest("No file provided")
+
+    asset_actions.upload_asset(bookmark, file)
+
+
+def remove_asset(request: HttpRequest, asset_id: int | str):
+    asset = access.asset_write(request, asset_id)
+    asset_actions.remove_asset(asset)
+
+
+def update_state(request: HttpRequest, bookmark_id: int | str):
+    bookmark = access.bookmark_write(request, bookmark_id)
+    bookmark.is_archived = request.POST.get("is_archived") == "on"
+    bookmark.unread = request.POST.get("unread") == "on"
+    bookmark.shared = request.POST.get("shared") == "on"
+    bookmark.save()
+
+
+@login_required
+def index_action(request: HttpRequest):
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    query = queries.query_bookmarks(request.user, request.user_profile, search)
+
+    response = handle_action(request, query)
+    if response:
+        return response
+
+    if turbo.accept(request):
+        return index_update(request)
+
+    return utils.redirect_with_query(request, reverse("linkding:bookmarks.index"))
+
+
+@login_required
+def archived_action(request: HttpRequest):
+    search = BookmarkSearch.from_request(
+        request, request.GET, request.user_profile.search_preferences
+    )
+    query = queries.query_archived_bookmarks(request.user, request.user_profile, search)
+
+    response = handle_action(request, query)
+    if response:
+        return response
+
+    if turbo.accept(request):
+        return archived_update(request)
+
+    return utils.redirect_with_query(request, reverse("linkding:bookmarks.archived"))
+
+
+@login_required
+def shared_action(request: HttpRequest):
+    if "bulk_execute" in request.POST:
+        return HttpResponseBadRequest("View does not support bulk actions")
+
+    response = handle_action(request)
+    if response:
+        return response
+
+    if turbo.accept(request):
+        return shared_update(request)
+
+    return utils.redirect_with_query(request, reverse("linkding:bookmarks.shared"))
+
+
+def handle_action(request: HttpRequest, query: QuerySet[Bookmark] = None):
+    # Single bookmark actions
+    if "archive" in request.POST:
+        return archive(request, request.POST["archive"])
+    if "unarchive" in request.POST:
+        return unarchive(request, request.POST["unarchive"])
+    if "remove" in request.POST:
+        return remove(request, request.POST["remove"])
+    if "mark_as_read" in request.POST:
+        return mark_as_read(request, request.POST["mark_as_read"])
+    if "unshare" in request.POST:
+        return unshare(request, request.POST["unshare"])
+    if "create_html_snapshot" in request.POST:
+        return create_html_snapshot(request, request.POST["create_html_snapshot"])
+    if "upload_asset" in request.POST:
+        return upload_asset(request, request.POST["upload_asset"])
+    if "remove_asset" in request.POST:
+        return remove_asset(request, request.POST["remove_asset"])
+
+    # State updates
+    if "update_state" in request.POST:
+        return update_state(request, request.POST["update_state"])
+
+    # Bulk actions
+    if "bulk_execute" in request.POST:
+        if query is None:
+            raise ValueError("Query must be provided for bulk actions")
+
+        bulk_action = request.POST["bulk_action"]
+
+        # Determine set of bookmarks
+        if request.POST.get("bulk_select_across") == "on":
+            # Query full list of bookmarks across all pages
+            bookmark_ids = query.only("id").values_list("id", flat=True)
+        else:
+            # Use only selected bookmarks
+            bookmark_ids = request.POST.getlist("bookmark_id")
+
+        if bulk_action == "bulk_archive":
+            return archive_bookmarks(bookmark_ids, request.user)
+        if bulk_action == "bulk_unarchive":
+            return unarchive_bookmarks(bookmark_ids, request.user)
+        if bulk_action == "bulk_delete":
+            return delete_bookmarks(bookmark_ids, request.user)
+        if bulk_action == "bulk_tag":
+            tag_string = convert_tag_string(request.POST["bulk_tag_string"])
+            return tag_bookmarks(bookmark_ids, tag_string, request.user)
+        if bulk_action == "bulk_untag":
+            tag_string = convert_tag_string(request.POST["bulk_tag_string"])
+            return untag_bookmarks(bookmark_ids, tag_string, request.user)
+        if bulk_action == "bulk_read":
+            return mark_bookmarks_as_read(bookmark_ids, request.user)
+        if bulk_action == "bulk_unread":
+            return mark_bookmarks_as_unread(bookmark_ids, request.user)
+        if bulk_action == "bulk_share":
+            return share_bookmarks(bookmark_ids, request.user)
+        if bulk_action == "bulk_unshare":
+            return unshare_bookmarks(bookmark_ids, request.user)
+        if bulk_action == "bulk_refresh":
+            return refresh_bookmarks_metadata(bookmark_ids, request.user)
+        if bulk_action == "bulk_snapshot":
+            return create_html_snapshots(bookmark_ids, request.user)
+
+
+@login_required
+def close(request: HttpRequest):
+    return render(request, "bookmarks/close.html")

@@ -1,0 +1,14 @@
+import "@hotwired/turbo";
+import "./components/bookmark-page.js";
+import "./components/clear-button.js";
+import "./components/confirm-dropdown.js";
+import "./components/details-modal.js";
+import "./components/dev-tool.js";
+import "./components/dropdown.js";
+import "./components/filter-drawer.js";
+import "./components/form.js";
+import "./components/modal.js";
+import "./components/search-autocomplete.js";
+import "./components/tag-autocomplete.js";
+import "./components/upload-button.js";
+import "./shortcuts.js";

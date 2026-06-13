@@ -1,0 +1,109 @@
+from django.template import RequestContext, Template
+from django.test import RequestFactory, TestCase
+
+from bookmarks.models import BookmarkSearch, User
+from bookmarks.tests.helpers import BookmarkFactoryMixin
+from bookmarks.views import contexts
+
+
+class UserSelectTagTest(TestCase, BookmarkFactoryMixin):
+    def render_template(self, url: str):
+        rf = RequestFactory()
+        request = rf.get(url)
+        request.user = self.get_or_create_test_user()
+        request.user_profile = self.get_or_create_test_user().profile
+        search = BookmarkSearch.from_request(request, request.GET)
+        user_list = contexts.UserListContext(request, search)
+        context = RequestContext(
+            request,
+            {
+                "request": request,
+                "user_list": user_list,
+            },
+        )
+        template_to_render = Template("{% include 'bookmarks/user_section.html' %}")
+        return template_to_render.render(context)
+
+    def assertUserOption(self, html: str, user: User, selected: bool = False):
+        self.assertInHTML(
+            f"""
+          <option value="{user.username}" {"selected" if selected else ""}>
+            {user.username}
+          </option>        
+        """,
+            html,
+        )
+
+    def assertHiddenInput(self, html: str, name: str, value: str = None):
+        needle = f'<input type="hidden" name="{name}"'
+        if value is not None:
+            needle += f' value="{value}"'
+
+        self.assertIn(needle, html)
+
+    def assertNoHiddenInput(self, html: str, name: str):
+        needle = f'<input type="hidden" name="{name}"'
+
+        self.assertNotIn(needle, html)
+
+    def test_empty_option(self):
+        user1 = self.setup_user(name="user1", enable_sharing=True)
+        self.setup_bookmark(user=user1, shared=True)
+
+        rendered_template = self.render_template("/test")
+
+        self.assertInHTML(
+            """
+          <option value="" selected="">Everyone</option>
+        """,
+            rendered_template,
+        )
+
+    def test_render_user_options(self):
+        user1 = self.setup_user(name="user1", enable_sharing=True)
+        user2 = self.setup_user(name="user2", enable_sharing=True)
+        user3 = self.setup_user(name="user3", enable_sharing=True)
+
+        self.setup_bookmark(user=user1, shared=True)
+        self.setup_bookmark(user=user2, shared=True)
+        self.setup_bookmark(user=user3, shared=True)
+
+        rendered_template = self.render_template("/test")
+
+        self.assertUserOption(rendered_template, user1)
+        self.assertUserOption(rendered_template, user2)
+        self.assertUserOption(rendered_template, user3)
+
+    def test_preselect_user_option(self):
+        user1 = self.setup_user(name="user1", enable_sharing=True)
+        user2 = self.setup_user(name="user2", enable_sharing=True)
+        user3 = self.setup_user(name="user3", enable_sharing=True)
+
+        self.setup_bookmark(user=user1, shared=True)
+        self.setup_bookmark(user=user2, shared=True)
+        self.setup_bookmark(user=user3, shared=True)
+
+        rendered_template = self.render_template("/test?user=user1")
+
+        self.assertUserOption(rendered_template, user1, True)
+
+    def test_hidden_inputs(self):
+        # Without params
+        url = "/test"
+        rendered_template = self.render_template(url)
+
+        self.assertNoHiddenInput(rendered_template, "user")
+        self.assertNoHiddenInput(rendered_template, "q")
+        self.assertNoHiddenInput(rendered_template, "sort")
+        self.assertNoHiddenInput(rendered_template, "shared")
+        self.assertNoHiddenInput(rendered_template, "unread")
+
+        # With params
+        url = "/test?q=foo&user=john&sort=title_asc&shared=yes&unread=yes"
+        rendered_template = self.render_template(url)
+
+        self.assertNoHiddenInput(rendered_template, "user")
+        self.assertHiddenInput(rendered_template, "q", "foo")
+        self.assertHiddenInput(rendered_template, "sort", "title_asc")
+        self.assertHiddenInput(rendered_template, "shared", "yes")
+        self.assertHiddenInput(rendered_template, "unread", "yes")

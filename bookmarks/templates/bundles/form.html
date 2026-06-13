@@ -1,0 +1,96 @@
+{% load shared %}
+<div class="form-group">
+  {% formlabel form.name "Name" %}
+  {% formfield form.name %}
+  {{ form.name.errors }}
+</div>
+<div class="form-group">
+  {% formlabel form.search "Search terms" %}
+  {% formfield form.search has_help=True %}
+  {{ form.search.errors }}
+  {% formhelp form.search %}
+    All of these search terms must be present in a bookmark to match.
+  {% endformhelp %}
+</div>
+<div class="form-group">
+  {% formlabel form.any_tags "Tags" %}
+  {% formfield form.any_tags has_help=True %}
+  {% formhelp form.any_tags %}
+    At least one of these tags must be present in a bookmark to match.
+  {% endformhelp %}
+</div>
+<div class="form-group">
+  {% formlabel form.all_tags "Required tags" %}
+  {% formfield form.all_tags has_help=True %}
+  {% formhelp form.all_tags %}
+    All of these tags must be present in a bookmark to match.
+  {% endformhelp %}
+</div>
+<div class="form-group">
+  {% formlabel form.excluded_tags "Excluded tags" %}
+  {% formfield form.excluded_tags has_help=True %}
+  {% formhelp form.excluded_tags %}
+    None of these tags must be present in a bookmark to match.
+  {% endformhelp %}
+</div>
+<div class="form-group">
+  {% formlabel form.filter_unread "Reading State" %}
+  {% formfield form.filter_unread has_help=True %}
+  {% formhelp form.filter_unread %}
+    Limit matches to unread or read bookmarks.
+  {% endformhelp %}
+</div>
+<div class="form-group">
+  {% formlabel form.filter_shared "Sharing State" %}
+  {% formfield form.filter_shared has_help=True %}
+  {% formhelp form.filter_shared %}
+    Limit matches to shared or unshared bookmarks.
+  {% endformhelp %}
+</div>
+<div class="form-footer d-flex mt-4">
+  <input type="submit"
+         name="save"
+         value="Save"
+         class="btn btn-primary btn-wide">
+  <a href="{% url 'linkding:bundles.index' %}"
+     class="btn btn-wide ml-auto">Cancel</a>
+  <a href="{% url 'linkding:bundles.preview' %}"
+     data-turbo-frame="preview"
+     class="d-none"
+     id="preview-link"></a>
+</div>
+<script>
+  (function init() {
+    const bundleForm = document.getElementById('bundle-form');
+    const previewLink = document.getElementById('preview-link');
+
+    let pendingUpdate;
+
+    function scheduleUpdate() {
+      if (pendingUpdate) {
+        clearTimeout(pendingUpdate);
+      }
+      pendingUpdate = setTimeout(() => {
+        // Ignore if link has been removed (e.g. form submit or navigation)
+        if (!previewLink.isConnected) {
+          return;
+        }
+
+        const baseUrl = previewLink.href.split('?')[0];
+        const params = new URLSearchParams();
+        const inputs = bundleForm.querySelectorAll('input[type="text"]:not([name="csrfmiddlewaretoken"]), textarea, select');
+
+        inputs.forEach(input => {
+          if (input.name && input.value.trim()) {
+            params.set(input.name, input.value.trim());
+          }
+        });
+
+        previewLink.href = params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl;
+        previewLink.click();
+      }, 500)
+    }
+
+    bundleForm.addEventListener('input', scheduleUpdate);
+  })();
+</script>

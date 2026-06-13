@@ -1,0 +1,10 @@
+<turbo-frame id="preview">
+{% if bookmark_list.is_empty %}
+  <div>No bookmarks match the current bundle.</div>
+{% else %}
+  <div class="mb-4">Found {{ bookmark_list.bookmarks_total }} bookmarks matching this bundle.</div>
+  {% with pagination_frame="preview" %}
+    {% include 'bookmarks/bookmark_list.html' %}
+  {% endwith %}
+{% endif %}
+</turbo-frame>

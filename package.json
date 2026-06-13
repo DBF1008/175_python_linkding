@@ -1,0 +1,27 @@
+{
+  "name": "linkding",
+  "scripts": {
+    "build": "npm run build-js && npm run build-theme-light && npm run build-theme-dark",
+    "build-js": "rollup -c",
+    "build-theme-light": "postcss -o bookmarks/static/theme-light.css bookmarks/styles/theme-light.css",
+    "build-theme-dark": "postcss -o bookmarks/static/theme-dark.css bookmarks/styles/theme-dark.css",
+    "dev": "rollup -c -w"
+  },
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.4",
+    "@hotwired/turbo": "^8.0.6",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/wasm-node": "^4.13.0",
+    "cssnano": "^7.0.6",
+    "lit": "^3.3.1",
+    "postcss": "^8.4.45",
+    "postcss-cli": "^11.0.0",
+    "postcss-import": "^16.1.0",
+    "postcss-nesting": "^13.0.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  },
+  "web-types": "./web-types.json"
+}

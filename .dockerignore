@@ -1,0 +1,22 @@
+# Ignore everything
+*
+
+# Include files required for build or at runtime
+!/bookmarks
+
+!/bootstrap.sh
+!/LICENSE.txt
+!/manage.py
+!/package.json
+!/package-lock.json
+!/postcss.config.js
+!/pyproject.toml
+!/rollup.config.mjs
+!/supervisord-tasks.conf
+!/supervisord-all.conf
+!/uv.lock
+!/uwsgi.ini
+!/version.txt
+
+ # Remove dev settings
+/bookmarks/settings/dev.py

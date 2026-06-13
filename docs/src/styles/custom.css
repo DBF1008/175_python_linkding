@@ -1,0 +1,103 @@
+:root {
+    --sl-nav-gap: 0.8rem;
+
+    --sl-text-xs: var(--sl-text-sm);
+}
+
+/* Colors (dark mode) */
+:root,
+::backdrop {
+    --sl-color-accent: hsl(241, 75%, 64%);
+    --sl-color-text-accent: hsl(241, 90%, 82%);
+}
+
+/* Colors (light mode) */
+:root[data-theme='light'],
+[data-theme='light'] ::backdrop {
+    --sl-color-accent: hsl(241, 63%, 59%);
+    --sl-color-text-accent: hsl(241, 63%, 55%);
+}
+
+/* Align site search */
+.header .title-wrapper + div.sl-flex {
+    justify-content: flex-end;
+}
+
+/* Site title */
+.site-title img {
+    height: 36px;
+}
+
+/* Social icon size */
+.social-icons svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Index page */
+[data-has-hero] header {
+    background: transparent;
+    border-bottom: solid 1px transparent;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+
+[data-has-hero] .page {
+    --hero-gradient: hsla(241, 63%, 59%, 0.2);
+    background: linear-gradient(205deg, var(--hero-gradient), transparent 30%);
+}
+
+[data-has-hero][data-theme="dark"] .page {
+    --hero-gradient: hsla(241, 63%, 59%, 0.25);
+}
+
+[data-has-hero] .hero {
+    padding-bottom: 1rem;
+}
+
+[data-has-hero] .hero-image img {
+    width: 100%;
+    border: solid 1px var(--sl-color-gray-5);
+    border-radius: .4rem;
+    box-shadow: var(--sl-shadow-lg);
+}
+
+[data-has-hero] .hero-image.dark img {
+    box-shadow: none;
+}
+
+[data-has-hero][data-theme="dark"] .hero-image.light {
+    display: none;
+}
+
+[data-has-hero][data-theme="light"] .hero-image.dark {
+    display: none;
+}
+
+[data-has-hero] h2 {
+    margin-top: 3rem;
+}
+
+[data-has-hero] .card-grid {
+    margin-top: 2rem !important;
+}
+
+@media (min-width: 50rem) {
+    [data-has-hero] .page {
+        --hero-gradient: hsla(241, 63%, 59%, 0.2);
+        background: linear-gradient(205deg, var(--hero-gradient), transparent 50%);
+    }
+
+    [data-has-hero] .hero {
+        padding-bottom: 4rem;
+    }
+
+    [data-has-hero] h2 {
+        margin-top: 6rem !important;
+    }
+
+    [data-has-hero] .card-grid {
+        margin-top: 3rem !important;
+        gap: 3rem;
+    }
+}
